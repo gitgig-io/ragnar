@@ -1,6 +1,8 @@
+// SPDX-License-Identifier: UNLICENSED
 pragma solidity >=0.4.22 <0.9.0;
 
 contract Bounties {
+    // TODO: should probably have a setter to update this
     address public oracle;
 
     // store registered and closed issues. 0 means registered, 1 means closed
@@ -86,7 +88,6 @@ contract Bounties {
         uint256 _amount
     ) public issueNotClosed(_repoRegistry, _repoId, _issueId) {
         // TODO: transfer tokens from the msg sender to this contract and record the bounty amount
-
         // record the number of tokens in the contract allocated to this issue
         bounties[_repoRegistry][_repoId][_issueId][_tokenContract] += _amount;
         // TOOD: what if the issue was already closed be we aren't tracking it??? FE could check...
