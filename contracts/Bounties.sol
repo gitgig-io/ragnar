@@ -5,6 +5,8 @@ contract Bounties {
     // TODO: should probably have a setter to update this
     address public oracle;
 
+    mapping(address => bool) public supportedTokens;
+
     // store registered and closed issues. 0 means registered, 1 means closed
     mapping(string => mapping(string => mapping(uint256 => address[])))
         public resolvers;
@@ -16,8 +18,11 @@ contract Bounties {
     mapping(string => mapping(string => mapping(uint256 => mapping(address => mapping(address => bool)))))
         public claimed;
 
-    constructor(address _oracle) {
+    constructor(address _oracle, address[] memory _supportedTokens) {
         oracle = _oracle;
+        for (uint256 i = 0; i < _supportedTokens.length; i++) {
+            supportedTokens[_supportedTokens[i]] = true;
+        }
     }
 
     modifier oracleOnly() {
@@ -25,6 +30,11 @@ contract Bounties {
             msg.sender == oracle,
             "This function is restricted to the oracle"
         );
+        _;
+    }
+
+    modifier supportedToken(address tokenContract) {
+        require(supportedTokens[tokenContract], "Unsupported token");
         _;
     }
 
@@ -86,7 +96,11 @@ contract Bounties {
         uint256 _issueId,
         address _tokenContract,
         uint256 _amount
-    ) public issueNotClosed(_repoRegistry, _repoId, _issueId) {
+    )
+        public
+        issueNotClosed(_repoRegistry, _repoId, _issueId)
+        supportedToken(_tokenContract)
+    {
         // TODO: transfer tokens from the msg sender to this contract and record the bounty amount
         // record the number of tokens in the contract allocated to this issue
         bounties[_repoRegistry][_repoId][_issueId][_tokenContract] += _amount;
@@ -144,5 +158,13 @@ contract Bounties {
                 ] = true;
             }
         }
+    }
+
+    function isIssueClosed(
+        string memory _repoRegistry,
+        string memory _repoId,
+        uint256 _issueId
+    ) public view returns (bool) {
+        return resolvers[_repoRegistry][_repoId][_issueId].length > 0;
     }
 }
