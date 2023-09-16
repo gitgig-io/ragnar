@@ -33,9 +33,9 @@ describe("Bounties", () => {
     });
 
     it("should not be able to post bounty on closed issue", async () => {
-      const { bounties, oracle, issuer, contributor } = await bountiesFixture();
+      const { bounties, oracle, issuer, contributor, usdc } = await bountiesFixture();
       await bounties.connect(oracle).closeIssue("1", "gitgig-io/ragnar", "123", [contributor.address]);
-      await expect(bounties.connect(issuer).postBounty("1", "gitgig-io/ragnar", "123", issuer.address, 5)).to.be.revertedWith("Issue is already closed");
+      await expect(bounties.connect(issuer).postBounty("1", "gitgig-io/ragnar", "123", await usdc.getAddress(), 5)).to.be.revertedWith("Issue is already closed");
     });
   });
 
