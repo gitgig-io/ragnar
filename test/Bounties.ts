@@ -24,7 +24,15 @@ describe("Bounties", () => {
   describe("PostBounty", () => {
     it("should be able to post bounty", async () => {
       const { bounties, issuer, usdc } = await bountiesFixture();
-      await bounties.connect(issuer).postBounty("1", "gitgig-io/ragnar", "123", await usdc.getAddress(), 5);
+      const amount = 5;
+
+      // when
+      await usdc.connect(issuer).approve(await bounties.getAddress(), amount);
+      await bounties.connect(issuer).postBounty("1", "gitgig-io/ragnar", "123", await usdc.getAddress(), amount);
+
+      // then
+      // ensure the smart contract has the tokens now
+      expect(await usdc.balanceOf(await bounties.getAddress())).to.be.eq(amount);
     });
 
     it("should not be able to post bounty with unsupported token", async () => {
@@ -49,6 +57,13 @@ describe("Bounties", () => {
       const { bounties, oracle, contributor } = await bountiesFixture();
       await bounties.connect(oracle).closeIssue("1", "gitgig-io/ragnar", "123", [contributor.address]);
       expect(await bounties.isIssueClosed("1", "gitgig-io/ragnar", "123")).to.be.true;
+    });
+
+    it("should revert if no resolvers specified", async () => {
+      const { bounties, oracle } = await bountiesFixture();
+      expect(await bounties.isIssueClosed("1", "gitgig-io/ragnar", "123")).to.be.false;
+      await expect(bounties.connect(oracle).closeIssue("1", "gitgig-io/ragnar", "123", [])).to.be.revertedWith("No resolvers specified");
+      expect(await bounties.isIssueClosed("1", "gitgig-io/ragnar", "123")).to.be.false;
     });
   });
 

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity >=0.4.22 <0.9.0;
 
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
 contract Bounties {
     // TODO: should probably have a setter to update this
     address public oracle;
@@ -101,9 +103,12 @@ contract Bounties {
         issueNotClosed(_repoRegistry, _repoId, _issueId)
         supportedToken(_tokenContract)
     {
-        // TODO: transfer tokens from the msg sender to this contract and record the bounty amount
         // record the number of tokens in the contract allocated to this issue
         bounties[_repoRegistry][_repoId][_issueId][_tokenContract] += _amount;
+
+        // transfer tokens from the msg sender to this contract and record the bounty amount
+        IERC20(_tokenContract).transferFrom(msg.sender, address(this), _amount);
+
         // TOOD: what if the issue was already closed be we aren't tracking it??? FE could check...
     }
 
@@ -113,6 +118,7 @@ contract Bounties {
         uint256 _issueId,
         address[] memory _resolvers
     ) public oracleOnly issueNotClosed(_repoRegistry, _repoId, _issueId) {
+        require(_resolvers.length > 0, "No resolvers specified");
         resolvers[_repoRegistry][_repoId][_issueId] = _resolvers;
     }
 
