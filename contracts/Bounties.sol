@@ -1,9 +1,32 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity >=0.4.22 <0.9.0;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+
+struct Project {
+    string _platform;
+    string repo;
+}
+
+struct Participant {
+    address wallet;
+    uint8 role;
+}
+
+struct TokenBag {
+    address token;
+    uint256 amount;
+    string symbol;
+}
 
 contract Bounties {
+    event BountyCreated(
+        Project project,
+        uint256 issue,
+        Participant issuer,
+        TokenBag asset
+    );
+
     // TODO: should probably have a setter to update this
     address public oracle;
 
@@ -41,29 +64,29 @@ contract Bounties {
     }
 
     modifier issueNotClosed(
-        string memory _repoRegistry,
+        string memory _platform,
         string memory _repoId,
         uint256 _issueId
     ) {
         require(
-            resolvers[_repoRegistry][_repoId][_issueId].length < 1,
+            resolvers[_platform][_repoId][_issueId].length < 1,
             "Issue is already closed"
         );
         _;
     }
 
     modifier resolverOnly(
-        string memory _repoRegistryId,
+        string memory _platform,
         string memory _repoId,
         uint256 _issueId
     ) {
         bool isResolver = false;
         for (
             uint256 i = 0;
-            i < resolvers[_repoRegistryId][_repoId][_issueId].length;
+            i < resolvers[_platform][_repoId][_issueId].length;
             i++
         ) {
-            address addr = resolvers[_repoRegistryId][_repoId][_issueId][i];
+            address addr = resolvers[_platform][_repoId][_issueId][i];
             if (msg.sender == addr) {
                 isResolver = true;
                 break;
@@ -75,7 +98,7 @@ contract Bounties {
     }
 
     modifier notClaimed(
-        string memory _repoRegistry,
+        string memory _platform,
         string memory _repoId,
         uint256 _issueId,
         address[] memory _tokenContracts
@@ -83,7 +106,7 @@ contract Bounties {
         for (uint256 i = 0; i < _tokenContracts.length; i++) {
             address _tokenContract = _tokenContracts[i];
             require(
-                claimed[_repoRegistry][_repoId][_issueId][_tokenContract][
+                claimed[_platform][_repoId][_issueId][_tokenContract][
                     msg.sender
                 ] == false,
                 "You have already claimed bounty"
@@ -93,59 +116,64 @@ contract Bounties {
     }
 
     function postBounty(
-        string memory _repoRegistry,
+        string memory _platform,
         string memory _repoId,
         uint256 _issueId,
         address _tokenContract,
         uint256 _amount
     )
         public
-        issueNotClosed(_repoRegistry, _repoId, _issueId)
+        issueNotClosed(_platform, _repoId, _issueId)
         supportedToken(_tokenContract)
     {
         // record the number of tokens in the contract allocated to this issue
-        bounties[_repoRegistry][_repoId][_issueId][_tokenContract] += _amount;
+        bounties[_platform][_repoId][_issueId][_tokenContract] += _amount;
 
         // transfer tokens from the msg sender to this contract and record the bounty amount
         IERC20(_tokenContract).transferFrom(msg.sender, address(this), _amount);
+
+        emit BountyCreated(
+            Project(_platform, _repoId),
+            _issueId,
+            Participant(msg.sender, 0), // 0 is issuer
+            TokenBag(_tokenContract, _amount, ERC20(_tokenContract).symbol())
+        );
 
         // TOOD: what if the issue was already closed be we aren't tracking it??? FE could check...
     }
 
     function closeIssue(
-        string memory _repoRegistry,
+        string memory _platform,
         string memory _repoId,
         uint256 _issueId,
         address[] memory _resolvers
-    ) public oracleOnly issueNotClosed(_repoRegistry, _repoId, _issueId) {
+    ) public oracleOnly issueNotClosed(_platform, _repoId, _issueId) {
         require(_resolvers.length > 0, "No resolvers specified");
-        resolvers[_repoRegistry][_repoId][_issueId] = _resolvers;
+        resolvers[_platform][_repoId][_issueId] = _resolvers;
     }
 
-    // TODO: a percent of each bounty to the maintainer and include a fee for the platform
+    // TODO: a percent of each bounty to the maintainer and include a fee for the _platform
     function claimBounty(
-        string memory _repoRegistry,
+        string memory _platform,
         string memory _repoId,
         uint256 _issueId,
         address[] memory _tokenContracts
-    ) public resolverOnly(_repoRegistry, _repoId, _issueId) {
+    ) public resolverOnly(_platform, _repoId, _issueId) {
         for (uint256 i = 0; i < _tokenContracts.length; i++) {
             uint8 _claimsRemaining = 0;
             address _tokenContract = _tokenContracts[i];
-            uint256 _amount = bounties[_repoRegistry][_repoId][_issueId][
+            uint256 _amount = bounties[_platform][_repoId][_issueId][
                 _tokenContract
             ];
 
             for (
                 uint256 j = 0;
-                j < resolvers[_repoRegistry][_repoId][_issueId].length;
+                j < resolvers[_platform][_repoId][_issueId].length;
                 j++
             ) {
-                address resolver = resolvers[_repoRegistry][_repoId][_issueId][
-                    j
-                ];
+                address resolver = resolvers[_platform][_repoId][_issueId][j];
                 if (
-                    claimed[_repoRegistry][_repoId][_issueId][_tokenContract][
+                    claimed[_platform][_repoId][_issueId][_tokenContract][
                         resolver
                     ] == false
                 ) {
@@ -159,7 +187,7 @@ contract Bounties {
                 // TODO: transfer tokens from this contract to the caller
 
                 // mark the bounty as claimed for this resolver
-                claimed[_repoRegistry][_repoId][_issueId][_tokenContract][
+                claimed[_platform][_repoId][_issueId][_tokenContract][
                     msg.sender
                 ] = true;
             }
@@ -167,10 +195,10 @@ contract Bounties {
     }
 
     function isIssueClosed(
-        string memory _repoRegistry,
+        string memory _platform,
         string memory _repoId,
         uint256 _issueId
     ) public view returns (bool) {
-        return resolvers[_repoRegistry][_repoId][_issueId].length > 0;
+        return resolvers[_platform][_repoId][_issueId].length > 0;
     }
 }

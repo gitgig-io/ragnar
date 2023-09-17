@@ -45,6 +45,19 @@ describe("Bounties", () => {
       await bounties.connect(oracle).closeIssue("1", "gitgig-io/ragnar", "123", [contributor.address]);
       await expect(bounties.connect(issuer).postBounty("1", "gitgig-io/ragnar", "123", await usdc.getAddress(), 5)).to.be.revertedWith("Issue is already closed");
     });
+
+    it("should emit a BountyCreated event", async () => {
+      const { bounties, issuer, usdc } = await bountiesFixture();
+      const amount = 5;
+
+      await usdc.connect(issuer).approve(await bounties.getAddress(), amount);
+      await expect(bounties.connect(issuer).postBounty("1", "gitgig-io/ragnar", "123", await usdc.getAddress(), amount)).to.emit(bounties, "BountyCreated").withArgs(
+        ["1", "gitgig-io/ragnar"],
+        "123",
+        [await issuer.getAddress(), 0],
+        [await usdc.getAddress(), amount, "USDC"],
+      )
+    });
   });
 
   describe("CloseIssue", () => {
