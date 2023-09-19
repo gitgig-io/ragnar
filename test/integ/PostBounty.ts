@@ -1,9 +1,8 @@
 import { ethers } from "hardhat";
+import fs from "fs";
 
-const USDC_ADDR =
-  "0xeB86B3E8e4AFc09319eceE2D1349AB2c60c8012c";
-const BOUNTIES_ADDR =
-  "0xE458FD74C6bea51dfCbF888260c32892550ec1A5";
+// read addresses from file
+const { bounties: BOUNTIES_ADDR, usdc: USDC_ADDR } = JSON.parse(fs.readFileSync("addresses.json", "utf8"));
 
 async function postBounty() {
   const [_owner, oracle, issuer, contributor] = await ethers.getSigners();
@@ -13,6 +12,8 @@ async function postBounty() {
 
   const BountiesFactory = await ethers.getContractFactory("Bounties");
   const bounties = BountiesFactory.attach(BOUNTIES_ADDR);
+
+  // const tx = await bounties.test();
 
   const amount = 5;
   await usdc.connect(issuer).approve(await bounties.getAddress(), amount);

@@ -19,22 +19,16 @@
     "anonymous": false,
     "inputs": [
       {
-        "components": [
-          {
-            "internalType": "string",
-            "name": "_platform",
-            "type": "string"
-          },
-          {
-            "internalType": "string",
-            "name": "repo",
-            "type": "string"
-          }
-        ],
         "indexed": false,
-        "internalType": "struct Project",
-        "name": "project",
-        "type": "tuple"
+        "internalType": "string",
+        "name": "platform",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "repo",
+        "type": "string"
       },
       {
         "indexed": false,
@@ -43,48 +37,44 @@
         "type": "uint256"
       },
       {
-        "components": [
-          {
-            "internalType": "address",
-            "name": "wallet",
-            "type": "address"
-          },
-          {
-            "internalType": "uint8",
-            "name": "role",
-            "type": "uint8"
-          }
-        ],
         "indexed": false,
-        "internalType": "struct Participant",
+        "internalType": "address",
         "name": "issuer",
-        "type": "tuple"
+        "type": "address"
       },
       {
-        "components": [
-          {
-            "internalType": "address",
-            "name": "token",
-            "type": "address"
-          },
-          {
-            "internalType": "uint256",
-            "name": "amount",
-            "type": "uint256"
-          },
-          {
-            "internalType": "string",
-            "name": "symbol",
-            "type": "string"
-          }
-        ],
         "indexed": false,
-        "internalType": "struct TokenBag",
-        "name": "asset",
-        "type": "tuple"
+        "internalType": "address",
+        "name": "token",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "symbol",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
       }
     ],
     "name": "BountyCreated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "message",
+        "type": "string"
+      }
+    ],
+    "name": "TestEvent",
     "type": "event"
   },
   {
@@ -125,34 +115,6 @@
     "inputs": [
       {
         "internalType": "string",
-        "name": "_platform",
-        "type": "string"
-      },
-      {
-        "internalType": "string",
-        "name": "_repoId",
-        "type": "string"
-      },
-      {
-        "internalType": "uint256",
-        "name": "_issueId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "address[]",
-        "name": "_tokenContracts",
-        "type": "address[]"
-      }
-    ],
-    "name": "claimBounty",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "string",
         "name": "",
         "type": "string"
       },
@@ -178,63 +140,6 @@
       }
     ],
     "name": "claimed",
-    "outputs": [
-      {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "string",
-        "name": "_platform",
-        "type": "string"
-      },
-      {
-        "internalType": "string",
-        "name": "_repoId",
-        "type": "string"
-      },
-      {
-        "internalType": "uint256",
-        "name": "_issueId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "address[]",
-        "name": "_resolvers",
-        "type": "address[]"
-      }
-    ],
-    "name": "closeIssue",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "string",
-        "name": "_platform",
-        "type": "string"
-      },
-      {
-        "internalType": "string",
-        "name": "_repoId",
-        "type": "string"
-      },
-      {
-        "internalType": "uint256",
-        "name": "_issueId",
-        "type": "uint256"
-      }
-    ],
-    "name": "isIssueClosed",
     "outputs": [
       {
         "internalType": "bool",
@@ -342,6 +247,13 @@
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "test",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   }
 ]

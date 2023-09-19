@@ -1,30 +1,24 @@
 import { ethers } from "hardhat";
+import fs from "fs";
 
 async function main() {
   const [_owner, oracle, issuer] = await ethers.getSigners();
 
   const usdc = await ethers.deployContract("TestUsdc", [1_000_000, await issuer.getAddress()]);
-  console.log(`Test USDC: ${await usdc.getAddress()}`);
+  const usdcAddress = await usdc.getAddress();
+  console.log(`Test USDC: ${usdcAddress}`);
 
   const bounties = await ethers.deployContract("Bounties", [await oracle.getAddress(), [await usdc.getAddress()]]);
-  console.log(`Bounties: ${await bounties.getAddress()}`);
+  const bountiesAddr = await bounties.getAddress();
+  console.log(`Bounties: ${bountiesAddr}`);
 
-  // const currentTimestampInSeconds = Math.round(Date.now() / 1000);
-  // const unlockTime = currentTimestampInSeconds + 60;
+  // write out addresses to a file
+  const addresses = {
+    bounties: bountiesAddr,
+    usdc: usdcAddress
+  }
 
-  // const lockedAmount = ethers.parseEther("0.001");
-
-  // const lock = await ethers.deployContract("Lock", [unlockTime], {
-  //   value: lockedAmount,
-  // });
-
-  // await lock.waitForDeployment();
-
-  // console.log(
-  //   `Lock with ${ethers.formatEther(
-  //     lockedAmount
-  //   )}ETH and unlock timestamp ${unlockTime} deployed to ${lock.target}`
-  // );
+  fs.writeFileSync("addresses.json", JSON.stringify(addresses));
 }
 
 // We recommend this pattern to be able to use async/await everywhere

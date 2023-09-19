@@ -45,3 +45,5 @@ typechain-types
 cache
 artifacts
 
+# local dev addresses
+addresses.json

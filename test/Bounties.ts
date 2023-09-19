@@ -52,10 +52,13 @@ describe("Bounties", () => {
 
       await usdc.connect(issuer).approve(await bounties.getAddress(), amount);
       await expect(bounties.connect(issuer).postBounty("1", "gitgig-io/ragnar", "123", await usdc.getAddress(), amount)).to.emit(bounties, "BountyCreated").withArgs(
-        ["1", "gitgig-io/ragnar"],
+        "1",
+        "gitgig-io/ragnar",
         "123",
-        [await issuer.getAddress(), 0],
-        [await usdc.getAddress(), amount, "USDC"],
+        await issuer.getAddress(),
+        await usdc.getAddress(),
+        "USDC",
+        amount,
       )
     });
   });

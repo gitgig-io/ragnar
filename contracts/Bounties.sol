@@ -1,30 +1,19 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity >=0.4.22 <0.9.0;
+pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-struct Project {
-    string _platform;
-    string repo;
-}
-
-struct Participant {
-    address wallet;
-    uint8 role;
-}
-
-struct TokenBag {
-    address token;
-    uint256 amount;
-    string symbol;
-}
-
 contract Bounties {
+    // TODO: which fields should be indexed?
     event BountyCreated(
-        Project project,
+        string platform,
+        string repo,
+        // TODO: should this be a string?
         uint256 issue,
-        Participant issuer,
-        TokenBag asset
+        address issuer,
+        address token,
+        string symbol,
+        uint256 amount
     );
 
     // TODO: should probably have a setter to update this
@@ -133,12 +122,14 @@ contract Bounties {
         IERC20(_tokenContract).transferFrom(msg.sender, address(this), _amount);
 
         emit BountyCreated(
-            Project(_platform, _repoId),
+            _platform,
+            _repoId,
             _issueId,
-            Participant(msg.sender, 0), // 0 is issuer
-            TokenBag(_tokenContract, _amount, ERC20(_tokenContract).symbol())
+            msg.sender,
+            _tokenContract,
+            ERC20(_tokenContract).symbol(),
+            _amount
         );
-
         // TOOD: what if the issue was already closed be we aren't tracking it??? FE could check...
     }
 
