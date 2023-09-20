@@ -32,9 +32,9 @@
       },
       {
         "indexed": false,
-        "internalType": "uint256",
+        "internalType": "string",
         "name": "issue",
-        "type": "uint256"
+        "type": "string"
       },
       {
         "indexed": false,
@@ -65,19 +65,6 @@
     "type": "event"
   },
   {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": false,
-        "internalType": "string",
-        "name": "message",
-        "type": "string"
-      }
-    ],
-    "name": "TestEvent",
-    "type": "event"
-  },
-  {
     "inputs": [
       {
         "internalType": "string",
@@ -90,9 +77,9 @@
         "type": "string"
       },
       {
-        "internalType": "uint256",
+        "internalType": "string",
         "name": "",
-        "type": "uint256"
+        "type": "string"
       },
       {
         "internalType": "address",
@@ -115,6 +102,34 @@
     "inputs": [
       {
         "internalType": "string",
+        "name": "_platform",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "_repoId",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "_issueId",
+        "type": "string"
+      },
+      {
+        "internalType": "address[]",
+        "name": "_tokenContracts",
+        "type": "address[]"
+      }
+    ],
+    "name": "claimBounty",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
         "name": "",
         "type": "string"
       },
@@ -124,9 +139,9 @@
         "type": "string"
       },
       {
-        "internalType": "uint256",
+        "internalType": "string",
         "name": "",
-        "type": "uint256"
+        "type": "string"
       },
       {
         "internalType": "address",
@@ -140,6 +155,63 @@
       }
     ],
     "name": "claimed",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "_platform",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "_repoId",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "_issueId",
+        "type": "string"
+      },
+      {
+        "internalType": "address[]",
+        "name": "_resolvers",
+        "type": "address[]"
+      }
+    ],
+    "name": "closeIssue",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "_platform",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "_repoId",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "_issueId",
+        "type": "string"
+      }
+    ],
+    "name": "isIssueClosed",
     "outputs": [
       {
         "internalType": "bool",
@@ -176,9 +248,9 @@
         "type": "string"
       },
       {
-        "internalType": "uint256",
+        "internalType": "string",
         "name": "_issueId",
-        "type": "uint256"
+        "type": "string"
       },
       {
         "internalType": "address",
@@ -209,9 +281,9 @@
         "type": "string"
       },
       {
-        "internalType": "uint256",
+        "internalType": "string",
         "name": "",
-        "type": "uint256"
+        "type": "string"
       },
       {
         "internalType": "uint256",
@@ -247,13 +319,6 @@
       }
     ],
     "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "test",
-    "outputs": [],
-    "stateMutability": "nonpayable",
     "type": "function"
   }
 ]

@@ -9,7 +9,7 @@ contract Bounties {
         string platform,
         string repo,
         // TODO: should this be a string?
-        uint256 issue,
+        string issue,
         address issuer,
         address token,
         string symbol,
@@ -22,14 +22,14 @@ contract Bounties {
     mapping(address => bool) public supportedTokens;
 
     // store registered and closed issues. 0 means registered, 1 means closed
-    mapping(string => mapping(string => mapping(uint256 => address[])))
+    mapping(string => mapping(string => mapping(string => address[])))
         public resolvers;
 
-    // store bounties by repo, issue and token
-    mapping(string => mapping(string => mapping(uint256 => mapping(address => uint256))))
+    // store bounties by platform, repo, issue and token
+    mapping(string => mapping(string => mapping(string => mapping(address => uint256))))
         public bounties;
 
-    mapping(string => mapping(string => mapping(uint256 => mapping(address => mapping(address => bool)))))
+    mapping(string => mapping(string => mapping(string => mapping(address => mapping(address => bool)))))
         public claimed;
 
     constructor(address _oracle, address[] memory _supportedTokens) {
@@ -55,7 +55,7 @@ contract Bounties {
     modifier issueNotClosed(
         string memory _platform,
         string memory _repoId,
-        uint256 _issueId
+        string memory _issueId
     ) {
         require(
             resolvers[_platform][_repoId][_issueId].length < 1,
@@ -67,7 +67,7 @@ contract Bounties {
     modifier resolverOnly(
         string memory _platform,
         string memory _repoId,
-        uint256 _issueId
+        string memory _issueId
     ) {
         bool isResolver = false;
         for (
@@ -89,7 +89,7 @@ contract Bounties {
     modifier notClaimed(
         string memory _platform,
         string memory _repoId,
-        uint256 _issueId,
+        string memory _issueId,
         address[] memory _tokenContracts
     ) {
         for (uint256 i = 0; i < _tokenContracts.length; i++) {
@@ -107,7 +107,7 @@ contract Bounties {
     function postBounty(
         string memory _platform,
         string memory _repoId,
-        uint256 _issueId,
+        string memory _issueId,
         address _tokenContract,
         uint256 _amount
     )
@@ -136,7 +136,7 @@ contract Bounties {
     function closeIssue(
         string memory _platform,
         string memory _repoId,
-        uint256 _issueId,
+        string memory _issueId,
         address[] memory _resolvers
     ) public oracleOnly issueNotClosed(_platform, _repoId, _issueId) {
         require(_resolvers.length > 0, "No resolvers specified");
@@ -147,7 +147,7 @@ contract Bounties {
     function claimBounty(
         string memory _platform,
         string memory _repoId,
-        uint256 _issueId,
+        string memory _issueId,
         address[] memory _tokenContracts
     ) public resolverOnly(_platform, _repoId, _issueId) {
         for (uint256 i = 0; i < _tokenContracts.length; i++) {
@@ -188,7 +188,7 @@ contract Bounties {
     function isIssueClosed(
         string memory _platform,
         string memory _repoId,
-        uint256 _issueId
+        string memory _issueId
     ) public view returns (bool) {
         return resolvers[_platform][_repoId][_issueId].length > 0;
     }
