@@ -10,4 +10,8 @@ contract TestUsdc is ERC20 {
     {
         _mint(recipient, _initialSupply);
     }
+
+    function decimals() public pure override returns (uint8) {
+        return 6;
+    }
 }

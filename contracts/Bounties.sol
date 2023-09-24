@@ -13,6 +13,7 @@ contract Bounties {
         address issuer,
         address token,
         string symbol,
+        uint8 decimals,
         uint256 amount
     );
 
@@ -128,6 +129,7 @@ contract Bounties {
             msg.sender,
             _tokenContract,
             ERC20(_tokenContract).symbol(),
+            ERC20(_tokenContract).decimals(),
             _amount
         );
         // TOOD: what if the issue was already closed be we aren't tracking it??? FE could check...
