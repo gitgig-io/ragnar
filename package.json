@@ -5,7 +5,9 @@
     "abi": "hardhat export-abi",
     "clean": "hardhat clean",
     "compile": "hardhat compile",
-    "deploy:local": "hardhat run --network localhost scripts/deploy.ts",
+    "deploy:local": "hardhat run --network localhost scripts/deploy-local.ts",
+    "deploy:arb-goerli": "hardhat run --network goerli scripts/deploy-arb-goerli.ts",
+    "postbounty:arb-goerli": "hardhat run --network goerli test/integ/PostBounty-Arb-Goerli.ts",
     "test": "hardhat test test/*.ts"
   },
   "keywords": [],
@@ -17,6 +19,7 @@
     "@types/mocha": "^10.0.1",
     "@types/node": "^20.6.2",
     "chai": "^4.3.8",
+    "dotenv": "^16.3.1",
     "hardhat": "^2.17.3",
     "hardhat-abi-exporter": "^2.10.1",
     "ts-node": "^10.9.1",
