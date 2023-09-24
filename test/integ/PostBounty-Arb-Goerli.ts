@@ -11,7 +11,7 @@ async function postBounty() {
   const usdc = TestUsdcFactory.attach(usdcAddress);
 
   const BountiesFactory = await ethers.getContractFactory("Bounties");
-  const bounties = BountiesFactory.attach("0xE15974c4E3699eE8e36162De44980A42707E37E4")
+  const bounties = BountiesFactory.attach("0x037b6d63DfB57e53C6E15d845a299A7026eF93F0");
 
   // const tx = await bounties.test();
 
