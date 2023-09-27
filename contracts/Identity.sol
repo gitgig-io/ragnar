@@ -30,7 +30,9 @@ contract Identity is ERC721URIStorage {
         signer = _signer;
     }
 
+    // TODO: switch this to EIP-712?? https://eips.ethereum.org/EIPS/eip-712#specification
     // TODO: do not allow a wallet to mint more than one NFT
+    // TODO: disallow transfers
 
     function mint(
         string memory _platformId,

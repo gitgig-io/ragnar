@@ -42,5 +42,18 @@ describe("Identity", () => {
         "Invalid signature"
       );
     });
+
+    it("fails to mint identity NFT with signature from wrong account", async () => {
+      const { identity, owner } = await identityFixture();
+      const msg = "some data";
+      const hash = ethers.id(msg);
+      const hashBytes = ethers.toBeArray(hash);
+      const signature = await owner.signMessage(hashBytes);
+
+
+      await expect(identity.mint("1", msg, signature)).to.be.revertedWith(
+        "Invalid signature"
+      );
+    });
   });
 });
