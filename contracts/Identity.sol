@@ -7,6 +7,8 @@ import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts/utils/Base64.sol";
+// TODO: remove
+import "hardhat/console.sol";
 
 // TODO: should this be a proxy??
 contract Identity is ERC721URIStorage {
@@ -35,11 +37,19 @@ contract Identity is ERC721URIStorage {
     // TODO: disallow transfers
 
     function mint(
+        address _userAddress,
         string memory _platformId,
-        string memory _data,
+        string memory _platformUserId,
+        string memory _platformUsername,
         bytes memory _signature
     ) public {
-        bytes32 _messageHash = keccak256(abi.encodePacked(_data));
+        bytes memory _data = abi.encode(
+            _userAddress,
+            _platformId,
+            _platformUserId,
+            _platformUsername
+        );
+        bytes32 _messageHash = keccak256(_data);
         bytes32 _ethMessageHash = ECDSA.toEthSignedMessageHash(_messageHash);
 
         require(
@@ -51,15 +61,14 @@ contract Identity is ERC721URIStorage {
             "Invalid signature"
         );
 
-        // TODO: decode data structure
-        // TODO: verify structure and required arguments
+        require(balanceOf(_userAddress) < 1, "Already minted");
 
         // TODO: extract data from data and set appropriate nft attributes
         // TODO: should we allow off-chain metadata extensions via a uri?
         _tokenIds.increment();
-        uint256 newItemId = _tokenIds.current();
-        _safeMint(msg.sender, newItemId);
-        _setTokenURI(newItemId, getTokenURI(_platformId, newItemId));
+        uint256 tokenId = _tokenIds.current();
+        _safeMint(_userAddress, tokenId);
+        // _setTokenURI(newItemId, getTokenURI(_platformId, newItemId));
     }
 
     function getTokenURI(string memory platformId, uint256 tokenId)
@@ -84,6 +93,61 @@ contract Identity is ERC721URIStorage {
                 abi.encodePacked(
                     "data:application/json;base64,",
                     Base64.encode(dataURI)
+                )
+            );
+    }
+
+    // TODO: remove these...
+    function toHex16(bytes16 data) internal pure returns (bytes32 result) {
+        result =
+            (bytes32(data) &
+                0xFFFFFFFFFFFFFFFF000000000000000000000000000000000000000000000000) |
+            ((bytes32(data) &
+                0x0000000000000000FFFFFFFFFFFFFFFF00000000000000000000000000000000) >>
+                64);
+        result =
+            (result &
+                0xFFFFFFFF000000000000000000000000FFFFFFFF000000000000000000000000) |
+            ((result &
+                0x00000000FFFFFFFF000000000000000000000000FFFFFFFF0000000000000000) >>
+                32);
+        result =
+            (result &
+                0xFFFF000000000000FFFF000000000000FFFF000000000000FFFF000000000000) |
+            ((result &
+                0x0000FFFF000000000000FFFF000000000000FFFF000000000000FFFF00000000) >>
+                16);
+        result =
+            (result &
+                0xFF000000FF000000FF000000FF000000FF000000FF000000FF000000FF000000) |
+            ((result &
+                0x00FF000000FF000000FF000000FF000000FF000000FF000000FF000000FF0000) >>
+                8);
+        result =
+            ((result &
+                0xF000F000F000F000F000F000F000F000F000F000F000F000F000F000F000F000) >>
+                4) |
+            ((result &
+                0x0F000F000F000F000F000F000F000F000F000F000F000F000F000F000F000F00) >>
+                8);
+        result = bytes32(
+            0x3030303030303030303030303030303030303030303030303030303030303030 +
+                uint256(result) +
+                (((uint256(result) +
+                    0x0606060606060606060606060606060606060606060606060606060606060606) >>
+                    4) &
+                    0x0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F) *
+                7
+        );
+    }
+
+    function toHex(bytes32 data) public pure returns (string memory) {
+        return
+            string(
+                abi.encodePacked(
+                    "0x",
+                    toHex16(bytes16(data)),
+                    toHex16(bytes16(data << 128))
                 )
             );
     }
