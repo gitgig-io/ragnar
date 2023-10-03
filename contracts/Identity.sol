@@ -63,7 +63,7 @@ contract Identity is ERC721URIStorage {
 
         require(balanceOf(_userAddress) < 1, "Already minted");
 
-        // TODO: extract data from data and set appropriate nft attributes
+        // TODO: extract data and set appropriate nft attributes
         // TODO: should we allow off-chain metadata extensions via a uri?
         _tokenIds.increment();
         uint256 tokenId = _tokenIds.current();
