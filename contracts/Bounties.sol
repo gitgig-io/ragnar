@@ -2,6 +2,8 @@
 pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
+import "./IIdentity.sol";
 
 contract Bounties {
     // TODO: which fields should be indexed?
@@ -17,13 +19,43 @@ contract Bounties {
         uint256 amount
     );
 
+    event IssueClosed(
+        string platform,
+        string repo,
+        string issue,
+        string maintainerUserId,
+        address maintainerAddress
+    );
+
+    event BountyClaimed(
+        string platform,
+        string repo,
+        string issue,
+        address maintainer,
+        address token,
+        string symbol,
+        uint8 decimals,
+        uint256 amount
+    );
+
+    address public signer;
+
+    // TODO: remove the oracle since it shouldn't be needed anymore
     // TODO: should probably have a setter to update this
     address public oracle;
 
-    mapping(address => bool) public supportedTokens;
+    // TODO: make this changeable by the owner
+    address public identityContract;
 
-    // store registered and closed issues. 0 means registered, 1 means closed
-    mapping(string => mapping(string => mapping(string => address[])))
+    // TODO: make this changeable by the owner
+    uint256 public maintainerFee = 10;
+
+    address[] public supportedTokens;
+
+    mapping(address => bool) public isSupportedToken;
+
+    // store registered and closed issues. 0 resolvers means registered, 1+ resolvers means closed
+    mapping(string => mapping(string => mapping(string => string[])))
         public resolvers;
 
     // store bounties by platform, repo, issue and token
@@ -33,10 +65,18 @@ contract Bounties {
     mapping(string => mapping(string => mapping(string => mapping(address => mapping(address => bool)))))
         public claimed;
 
-    constructor(address _oracle, address[] memory _supportedTokens) {
+    constructor(
+        address _oracle,
+        address _signer,
+        address _identityContract,
+        address[] memory _supportedTokens
+    ) {
+        signer = _signer;
+        identityContract = _identityContract;
         oracle = _oracle;
+        supportedTokens = _supportedTokens;
         for (uint256 i = 0; i < _supportedTokens.length; i++) {
-            supportedTokens[_supportedTokens[i]] = true;
+            isSupportedToken[_supportedTokens[i]] = true;
         }
     }
 
@@ -49,7 +89,7 @@ contract Bounties {
     }
 
     modifier supportedToken(address tokenContract) {
-        require(supportedTokens[tokenContract], "Unsupported token");
+        require(isSupportedToken[tokenContract], "Unsupported token");
         _;
     }
 
@@ -65,27 +105,27 @@ contract Bounties {
         _;
     }
 
-    modifier resolverOnly(
-        string memory _platform,
-        string memory _repoId,
-        string memory _issueId
-    ) {
-        bool isResolver = false;
-        for (
-            uint256 i = 0;
-            i < resolvers[_platform][_repoId][_issueId].length;
-            i++
-        ) {
-            address addr = resolvers[_platform][_repoId][_issueId][i];
-            if (msg.sender == addr) {
-                isResolver = true;
-                break;
-            }
-        }
+    // modifier resolverOnly(
+    //     string memory _platform,
+    //     string memory _repoId,
+    //     string memory _issueId
+    // ) {
+    //     bool isResolver = false;
+    //     for (
+    //         uint256 i = 0;
+    //         i < resolvers[_platform][_repoId][_issueId].length;
+    //         i++
+    //     ) {
+    //         address addr = resolvers[_platform][_repoId][_issueId][i];
+    //         if (msg.sender == addr) {
+    //             isResolver = true;
+    //             break;
+    //         }
+    //     }
 
-        require(isResolver, "This function is restricted to resolvers");
-        _;
-    }
+    //     require(isResolver, "This function is restricted to resolvers");
+    //     _;
+    // }
 
     modifier notClaimed(
         string memory _platform,
@@ -135,57 +175,150 @@ contract Bounties {
         // TOOD: what if the issue was already closed be we aren't tracking it??? FE could check...
     }
 
-    function closeIssue(
-        string memory _platform,
+    // The signature will ensure that this will always transfer tokens to the maintainer
+    // regardless of who sends the transaction because the maintainerAddress is part of the
+    // signature
+    function maintainerClaim(
+        // TODO: where is this maintainer address coming from??
+        // instead: pass in maintainer's github id, then lookup wallet from identity contract
+        string memory _maintainerUserId,
+        string memory _platformId,
         string memory _repoId,
         string memory _issueId,
-        address[] memory _resolvers
-    ) public oracleOnly issueNotClosed(_platform, _repoId, _issueId) {
-        require(_resolvers.length > 0, "No resolvers specified");
-        resolvers[_platform][_repoId][_issueId] = _resolvers;
-    }
+        string[] memory _resolverIds,
+        bytes memory _signature
+    ) public issueNotClosed(_platformId, _repoId, _issueId) {
+        // lookup maintainer wallet from _maintainerUserId
+        address _maintainerAddress = IIdentity(identityContract)
+            .walletForPlatformUser(_platformId, _maintainerUserId);
 
-    // TODO: a percent of each bounty to the maintainer and include a fee for the _platform
-    function claimBounty(
-        string memory _platform,
-        string memory _repoId,
-        string memory _issueId,
-        address[] memory _tokenContracts
-    ) public resolverOnly(_platform, _repoId, _issueId) {
-        for (uint256 i = 0; i < _tokenContracts.length; i++) {
-            uint8 _claimsRemaining = 0;
-            address _tokenContract = _tokenContracts[i];
-            uint256 _amount = bounties[_platform][_repoId][_issueId][
-                _tokenContract
-            ];
+        // ensure the maintainer address is linked
+        require(
+            _maintainerAddress != address(0),
+            "Maintainer identity not established"
+        );
 
-            for (
-                uint256 j = 0;
-                j < resolvers[_platform][_repoId][_issueId].length;
-                j++
-            ) {
-                address resolver = resolvers[_platform][_repoId][_issueId][j];
-                if (
-                    claimed[_platform][_repoId][_issueId][_tokenContract][
-                        resolver
-                    ] == false
-                ) {
-                    _claimsRemaining++;
-                }
-            }
+        // scope to reduce local variables
+        {
+            // TODO: add a modifier to ensure the given issue actually has a bounty??
+            // 1. verify the signature
+            bytes memory _data = abi.encode(
+                _maintainerUserId,
+                _platformId,
+                _repoId,
+                _issueId,
+                _resolverIds
+            );
+            bytes32 _messageHash = keccak256(_data);
+            bytes32 _ethMessageHash = ECDSA.toEthSignedMessageHash(
+                _messageHash
+            );
 
-            uint256 _resolverAmount = _amount / _claimsRemaining;
+            require(
+                SignatureChecker.isValidSignatureNow(
+                    signer,
+                    _ethMessageHash,
+                    _signature
+                ),
+                "Invalid signature"
+            );
 
-            if (_resolverAmount > 0) {
-                // TODO: transfer tokens from this contract to the caller
+            // 2. mark the issue as closed
+            resolvers[_platformId][_repoId][_issueId] = _resolverIds;
+        }
 
-                // mark the bounty as claimed for this resolver
-                claimed[_platform][_repoId][_issueId][_tokenContract][
-                    msg.sender
-                ] = true;
+        emit IssueClosed(
+            _platformId,
+            _repoId,
+            _issueId,
+            _maintainerUserId,
+            _maintainerAddress
+        );
+
+        // 3. For each token...
+        for (uint256 index = 0; index < supportedTokens.length; index++) {
+            // 3a. compute the bounty claim amount for the maintainer
+            uint256 amount = maintainerClaimAmount(
+                _platformId,
+                _repoId,
+                _issueId,
+                supportedTokens[index]
+            );
+
+            if (amount > 0) {
+                // 3b. transfer tokens to the maintainer
+                IERC20(supportedTokens[index]).transfer(
+                    _maintainerAddress,
+                    amount
+                );
+
+                emit BountyClaimed(
+                    _platformId,
+                    _repoId,
+                    _issueId,
+                    _maintainerAddress,
+                    supportedTokens[index],
+                    ERC20(supportedTokens[index]).symbol(),
+                    ERC20(supportedTokens[index]).decimals(),
+                    amount
+                );
             }
         }
     }
+
+    // returns the total amount of tokens the maintainer will receive for this bounty
+    function maintainerClaimAmount(
+        string memory _platformId,
+        string memory _repoId,
+        string memory _issueId,
+        address _token
+    ) public view returns (uint256) {
+        return
+            (bounties[_platformId][_repoId][_issueId][_token] * maintainerFee) /
+            100;
+    }
+
+    // TODO: a percent of each bounty to the maintainer and include a fee for the _platform
+    // function claimBounty(
+    //     string memory _platform,
+    //     string memory _repoId,
+    //     string memory _issueId,
+    //     address[] memory _tokenContracts
+    // ) public resolverOnly(_platform, _repoId, _issueId) {
+    //     for (uint256 i = 0; i < _tokenContracts.length; i++) {
+    //         uint8 _claimsRemaining = 0;
+    //         address _tokenContract = _tokenContracts[i];
+    //         uint256 _amount = bounties[_platform][_repoId][_issueId][
+    //             _tokenContract
+    //         ];
+
+    //         for (
+    //             uint256 j = 0;
+    //             j < resolvers[_platform][_repoId][_issueId].length;
+    //             j++
+    //         ) {
+    //             address resolver = resolvers[_platform][_repoId][_issueId][j];
+    //             if (
+    //                 claimed[_platform][_repoId][_issueId][_tokenContract][
+    //                     resolver
+    //                 ] == false
+    //             ) {
+    //                 _claimsRemaining++;
+    //             }
+    //         }
+
+    //         uint256 _resolverAmount = _amount / _claimsRemaining;
+
+    //         if (_resolverAmount > 0) {
+    //             // TODO: transfer tokens from this contract to the caller
+
+    //             // mark the bounty as claimed for this resolver
+    //             claimed[_platform][_repoId][_issueId][_tokenContract][
+    //                 msg.sender
+    //             ] = true;
+    //         }
+    //     }
+    // }
 
     function isIssueClosed(
         string memory _platform,

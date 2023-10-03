@@ -1,5 +1,6 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
+import { mintSignature } from "./helpers/signatureHelpers";
 
 describe("Identity", () => {
   async function identityFixture() {
@@ -17,18 +18,6 @@ describe("Identity", () => {
   });
 
   describe("Mint", () => {
-    async function mintSignature(params: string[], signer: any) {
-      const abiCoder = new ethers.AbiCoder();
-      const msg = abiCoder.encode(["address", "string", "string", "string"], params);
-      // console.log('msg: ', msg);
-      const hash = ethers.keccak256(msg);
-      // console.log('data hash: ', hash);
-      // without this conversion the number of bytes will be 64 instead of 32 which is wrong.
-      const hashBytes = ethers.toBeArray(hash);
-      const signature = await signer.signMessage(hashBytes);
-      return signature;
-    }
-
     it("should be able to mint identity NFT", async () => {
       // given
       const { identity, signer, user } = await identityFixture();

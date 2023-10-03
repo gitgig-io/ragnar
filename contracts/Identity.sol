@@ -7,11 +7,12 @@ import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts/utils/Base64.sol";
+import "./IIdentity.sol";
 // TODO: remove
 import "hardhat/console.sol";
 
 // TODO: should this be a proxy??
-contract Identity is ERC721URIStorage {
+contract Identity is IIdentity, ERC721URIStorage {
     using ECDSA for bytes32;
     using Strings for uint256;
     using Counters for Counters.Counter;
@@ -28,9 +29,14 @@ contract Identity is ERC721URIStorage {
     // platformId -> tokenId -> userId
     mapping(string => mapping(uint256 => string)) public platformUserIds;
 
+    mapping(string => mapping(string => address)) public walletForPlatformUser;
+
     constructor(address _signer) ERC721("GitGigIdentity", "GGID") {
         signer = _signer;
     }
+
+    // TODO: probably need a function for users to drop their wallet association
+    // if they lost the keys... or just a function to overwrite it.
 
     // TODO: switch this to EIP-712?? https://eips.ethereum.org/EIPS/eip-712#specification
     // TODO: do not allow a wallet to mint more than one NFT
@@ -63,12 +69,18 @@ contract Identity is ERC721URIStorage {
 
         require(balanceOf(_userAddress) < 1, "Already minted");
 
+        // TODO: ensure the platformUserId does not already have an existing wallet
+
         // TODO: extract data and set appropriate nft attributes
         // TODO: should we allow off-chain metadata extensions via a uri?
         _tokenIds.increment();
         uint256 tokenId = _tokenIds.current();
         _safeMint(_userAddress, tokenId);
         // _setTokenURI(newItemId, getTokenURI(_platformId, newItemId));
+
+        walletForPlatformUser[_platformId][_platformUserId] = _userAddress;
+
+        // TODO: emit wallet association event
     }
 
     function getTokenURI(string memory platformId, uint256 tokenId)
