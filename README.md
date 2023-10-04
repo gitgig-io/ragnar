@@ -9,5 +9,22 @@ npx hardhat help
 npx hardhat test
 REPORT_GAS=true npx hardhat test
 npx hardhat node
-npx hardhat run scripts/deploy.ts
+npx hardhat run scripts/deploy-local.ts
 ```
+
+## Development
+
+### Deploy to Local Network
+
+Run local node
+
+```bash
+npx hardhat node
+```
+
+In another terminal, deploy the contracts
+
+```bash
+npm run deploy:local
+```
+
