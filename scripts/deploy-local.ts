@@ -2,19 +2,34 @@ import { ethers } from "hardhat";
 import fs from "fs";
 
 async function main() {
-  const [_owner, oracle, issuer] = await ethers.getSigners();
+  const [_owner, oracle, signer, issuer] = await ethers.getSigners();
+
+  console.log('----- ACCOUNTS -----');
+  console.log(`Signer: ${await signer.getAddress()}`);
+  console.log(`Issuer: ${await signer.getAddress()}`);
+  console.log('--------------------');
 
   const usdc = await ethers.deployContract("TestUsdc", [1_000_000, await issuer.getAddress()]);
   const usdcAddress = await usdc.getAddress();
   console.log(`Test USDC: ${usdcAddress}`);
 
-  const bounties = await ethers.deployContract("Bounties", [await oracle.getAddress(), [await usdc.getAddress()]]);
+  const identity = await ethers.deployContract("Identity", [await signer.getAddress()]);
+  const identityAddress = await identity.getAddress();
+  console.log(`Identity: ${identityAddress}`);
+
+  const bounties = await ethers.deployContract("Bounties", [
+    await oracle.getAddress(),
+    await signer.getAddress(),
+    await identity.getAddress(),
+    [await usdc.getAddress()]
+  ]);
   const bountiesAddr = await bounties.getAddress();
   console.log(`Bounties: ${bountiesAddr}`);
 
   // write out addresses to a file
   const addresses = {
     bounties: bountiesAddr,
+    identity: identityAddress,
     usdc: usdcAddress
   }
 
