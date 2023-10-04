@@ -16,11 +16,11 @@ export async function mintSignature(params: string[], signer: HardhatEthersSigne
 export async function maintainerClaimSignature(params: any[], signer: HardhatEthersSigner) {
   const abiCoder = new ethers.AbiCoder();
   const msg = abiCoder.encode(["string", "string", "string", "string", "string[]"], params);
-  // console.log('msg: ', msg);
   const hash = ethers.keccak256(msg);
-  // console.log('data hash: ', hash);
+  // console.log('messageHash: ', hash);
   // without this conversion the number of bytes will be 64 instead of 32 which is wrong.
   const hashBytes = ethers.toBeArray(hash);
+  // console.log('ethMessageHash: ', ethers.hashMessage(hashBytes));
   const signature = await signer.signMessage(hashBytes);
   return signature;
 }
