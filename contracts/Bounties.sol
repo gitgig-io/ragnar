@@ -5,6 +5,10 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import "./IIdentity.sol";
 
+// TODO: remove these
+// import "@openzeppelin/contracts/utils/Strings.sol";
+// import "hardhat/console.sol";
+
 contract Bounties {
     // TODO: which fields should be indexed?
     event BountyCreated(
@@ -105,43 +109,45 @@ contract Bounties {
         _;
     }
 
-    // modifier resolverOnly(
-    //     string memory _platform,
-    //     string memory _repoId,
-    //     string memory _issueId
-    // ) {
-    //     bool isResolver = false;
-    //     for (
-    //         uint256 i = 0;
-    //         i < resolvers[_platform][_repoId][_issueId].length;
-    //         i++
-    //     ) {
-    //         address addr = resolvers[_platform][_repoId][_issueId][i];
-    //         if (msg.sender == addr) {
-    //             isResolver = true;
-    //             break;
-    //         }
-    //     }
-
-    //     require(isResolver, "This function is restricted to resolvers");
-    //     _;
-    // }
-
-    modifier notClaimed(
-        string memory _platform,
+    modifier unclaimedResolverOnly(
+        string memory _platformId,
         string memory _repoId,
-        string memory _issueId,
-        address[] memory _tokenContracts
+        string memory _issueId
     ) {
-        for (uint256 i = 0; i < _tokenContracts.length; i++) {
-            address _tokenContract = _tokenContracts[i];
+        // first ensure they have not claimed yet
+        for (uint256 i = 0; i < supportedTokens.length; i++) {
             require(
-                claimed[_platform][_repoId][_issueId][_tokenContract][
+                claimed[_platformId][_repoId][_issueId][supportedTokens[i]][
                     msg.sender
                 ] == false,
                 "You have already claimed bounty"
             );
         }
+
+        // next ensure they are actually a resolver for this issue
+        bool isResolver = false;
+
+        for (
+            uint256 i = 0;
+            i < resolvers[_platformId][_repoId][_issueId].length;
+            i++
+        ) {
+            string memory _resolverUserId = resolvers[_platformId][_repoId][
+                _issueId
+            ][i];
+
+            address addr = IIdentity(identityContract).walletForPlatformUser(
+                _platformId,
+                _resolverUserId
+            );
+
+            if (msg.sender == addr) {
+                isResolver = true;
+                break;
+            }
+        }
+
+        require(isResolver, "You are not a resolver");
         _;
     }
 
@@ -210,9 +216,11 @@ contract Bounties {
                 _resolverIds
             );
             bytes32 _messageHash = keccak256(_data);
+            // console.log("_messageHash: ", toHex(_messageHash));
             bytes32 _ethMessageHash = ECDSA.toEthSignedMessageHash(
                 _messageHash
             );
+            // console.log("_ethMessageHash: ", toHex(_ethMessageHash));
 
             require(
                 SignatureChecker.isValidSignatureNow(
@@ -252,6 +260,11 @@ contract Bounties {
                     amount
                 );
 
+                // 3c. remove the amount from the bounty
+                bounties[_platformId][_repoId][_issueId][
+                    supportedTokens[index]
+                ] -= amount;
+
                 emit BountyClaimed(
                     _platformId,
                     _repoId,
@@ -279,46 +292,67 @@ contract Bounties {
     }
 
     // TODO: a percent of each bounty to the maintainer and include a fee for the _platform
-    // function claimBounty(
-    //     string memory _platform,
-    //     string memory _repoId,
-    //     string memory _issueId,
-    //     address[] memory _tokenContracts
-    // ) public resolverOnly(_platform, _repoId, _issueId) {
-    //     for (uint256 i = 0; i < _tokenContracts.length; i++) {
-    //         uint8 _claimsRemaining = 0;
-    //         address _tokenContract = _tokenContracts[i];
-    //         uint256 _amount = bounties[_platform][_repoId][_issueId][
-    //             _tokenContract
-    //         ];
+    function contributorClaim(
+        string memory _platformId,
+        string memory _repoId,
+        string memory _issueId
+    ) public unclaimedResolverOnly(_platformId, _repoId, _issueId) {
+        for (uint256 i = 0; i < supportedTokens.length; i++) {
+            uint8 _claimsRemaining = 0;
+            address _tokenContract = supportedTokens[i];
+            uint256 _amount = bounties[_platformId][_repoId][_issueId][
+                _tokenContract
+            ];
 
-    //         for (
-    //             uint256 j = 0;
-    //             j < resolvers[_platform][_repoId][_issueId].length;
-    //             j++
-    //         ) {
-    //             address resolver = resolvers[_platform][_repoId][_issueId][j];
-    //             if (
-    //                 claimed[_platform][_repoId][_issueId][_tokenContract][
-    //                     resolver
-    //                 ] == false
-    //             ) {
-    //                 _claimsRemaining++;
-    //             }
-    //         }
+            for (
+                uint256 j = 0;
+                j < resolvers[_platformId][_repoId][_issueId].length;
+                j++
+            ) {
+                string memory _resolverUserId = resolvers[_platformId][_repoId][
+                    _issueId
+                ][j];
+                // if the user hasn't linked yet this will be the zero address which can never claim
+                address _resolver = IIdentity(identityContract)
+                    .walletForPlatformUser(_platformId, _resolverUserId);
+                if (
+                    claimed[_platformId][_repoId][_issueId][_tokenContract][
+                        _resolver
+                    ] == false
+                ) {
+                    _claimsRemaining++;
+                }
+            }
 
-    //         uint256 _resolverAmount = _amount / _claimsRemaining;
+            uint256 _resolverAmount = _amount / _claimsRemaining;
 
-    //         if (_resolverAmount > 0) {
-    //             // TODO: transfer tokens from this contract to the caller
+            if (_resolverAmount > 0) {
+                // transfer tokens from this contract to the caller
+                IERC20(_tokenContract).transfer(msg.sender, _resolverAmount);
 
-    //             // mark the bounty as claimed for this resolver
-    //             claimed[_platform][_repoId][_issueId][_tokenContract][
-    //                 msg.sender
-    //             ] = true;
-    //         }
-    //     }
-    // }
+                // mark the bounty as claimed for this resolver
+                claimed[_platformId][_repoId][_issueId][_tokenContract][
+                    msg.sender
+                ] = true;
+
+                // reduce the bounty by the amount claimed for this user
+                bounties[_platformId][_repoId][_issueId][
+                    _tokenContract
+                ] -= _resolverAmount;
+
+                emit BountyClaimed(
+                    _platformId,
+                    _repoId,
+                    _issueId,
+                    msg.sender,
+                    _tokenContract,
+                    ERC20(_tokenContract).symbol(),
+                    ERC20(_tokenContract).decimals(),
+                    _resolverAmount
+                );
+            }
+        }
+    }
 
     function isIssueClosed(
         string memory _platform,
@@ -326,5 +360,60 @@ contract Bounties {
         string memory _issueId
     ) public view returns (bool) {
         return resolvers[_platform][_repoId][_issueId].length > 0;
+    }
+
+    // TODO: remove these
+    function toHex16(bytes16 data) internal pure returns (bytes32 result) {
+        result =
+            (bytes32(data) &
+                0xFFFFFFFFFFFFFFFF000000000000000000000000000000000000000000000000) |
+            ((bytes32(data) &
+                0x0000000000000000FFFFFFFFFFFFFFFF00000000000000000000000000000000) >>
+                64);
+        result =
+            (result &
+                0xFFFFFFFF000000000000000000000000FFFFFFFF000000000000000000000000) |
+            ((result &
+                0x00000000FFFFFFFF000000000000000000000000FFFFFFFF0000000000000000) >>
+                32);
+        result =
+            (result &
+                0xFFFF000000000000FFFF000000000000FFFF000000000000FFFF000000000000) |
+            ((result &
+                0x0000FFFF000000000000FFFF000000000000FFFF000000000000FFFF00000000) >>
+                16);
+        result =
+            (result &
+                0xFF000000FF000000FF000000FF000000FF000000FF000000FF000000FF000000) |
+            ((result &
+                0x00FF000000FF000000FF000000FF000000FF000000FF000000FF000000FF0000) >>
+                8);
+        result =
+            ((result &
+                0xF000F000F000F000F000F000F000F000F000F000F000F000F000F000F000F000) >>
+                4) |
+            ((result &
+                0x0F000F000F000F000F000F000F000F000F000F000F000F000F000F000F000F00) >>
+                8);
+        result = bytes32(
+            0x3030303030303030303030303030303030303030303030303030303030303030 +
+                uint256(result) +
+                (((uint256(result) +
+                    0x0606060606060606060606060606060606060606060606060606060606060606) >>
+                    4) &
+                    0x0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F) *
+                7
+        );
+    }
+
+    function toHex(bytes32 data) public pure returns (string memory) {
+        return
+            string(
+                abi.encodePacked(
+                    "0x",
+                    toHex16(bytes16(data)),
+                    toHex16(bytes16(data << 128))
+                )
+            );
     }
 }
