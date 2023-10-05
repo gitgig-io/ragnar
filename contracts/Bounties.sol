@@ -52,7 +52,13 @@ contract Bounties {
     address public identityContract;
 
     // TODO: make this changeable by the owner
-    uint256 public maintainerFee = 10;
+    uint8 public serviceFee = 20;
+
+    // TODO: make this changeable by the owner
+    uint8 public maintainerFee = 10;
+
+    // store the service fees that have accumulated
+    mapping(address => uint256) public fees;
 
     address[] public supportedTokens;
 
@@ -162,8 +168,13 @@ contract Bounties {
         issueNotClosed(_platform, _repoId, _issueId)
         supportedToken(_tokenContract)
     {
+        // capture fee
+        uint256 _fee = (_amount * serviceFee) / 100;
+        fees[_tokenContract] += _fee;
+
         // record the number of tokens in the contract allocated to this issue
-        bounties[_platform][_repoId][_issueId][_tokenContract] += _amount;
+        uint256 _bountyAmount = _amount - _fee;
+        bounties[_platform][_repoId][_issueId][_tokenContract] += _bountyAmount;
 
         // transfer tokens from the msg sender to this contract and record the bounty amount
         IERC20(_tokenContract).transferFrom(msg.sender, address(this), _amount);
