@@ -4,9 +4,6 @@ import { maintainerClaimSignature, mintSignature } from "./helpers/signatureHelp
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { Bounties, Identity, TestUsdc } from "../typechain-types";
 
-const MAINTAINER_RATIO = 0.1;
-const CONTRIBUTOR_RATIO = 1 - MAINTAINER_RATIO;
-
 describe("Bounties", () => {
   async function bountiesFixture() {
     const [_owner, oracle, signer, issuer, maintainer, contributor, contributor2, contributor3] = await ethers.getSigners();
@@ -84,6 +81,28 @@ describe("Bounties", () => {
     await bounties.connect(issuer).postBounty(platformId, repoId, issueId, await usdc.getAddress(), amount);
   }
 
+  async function maintainerFee(bounties: Bounties, amount: number) {
+    const serviceFee = ethers.toNumber(await bounties.serviceFee());
+    const maintainerFee = ethers.toNumber(await bounties.maintainerFee());
+    const amountAfterServiceFee = amount - (serviceFee * amount / 100);
+    return (maintainerFee * amountAfterServiceFee / 100);
+  }
+
+  async function bountyAmountAfterFees(bounties: Bounties, postedAmount: number) {
+    const serviceFee = ethers.toNumber(await bounties.serviceFee());
+    const amountAfterServiceFee = postedAmount - (serviceFee * postedAmount / 100);
+
+    const maintainerFee = ethers.toNumber(await bounties.maintainerFee());
+    const amountAfterMaintainerFee = amountAfterServiceFee - (maintainerFee * amountAfterServiceFee / 100);
+
+    return amountAfterMaintainerFee;
+  }
+
+  async function bountyAmountAfterFeesPerContributor(bounties: Bounties, postedAmount: number, numContributors: number) {
+    const amountAfterServiceFee = await bountyAmountAfterFees(bounties, postedAmount);
+    return amountAfterServiceFee / numContributors;
+  }
+
   describe("Deployment", () => {
     it("should be able to deploy bounty contract", async () => {
       const { bounties } = await bountiesFixture();
@@ -103,6 +122,22 @@ describe("Bounties", () => {
       // then
       // ensure the smart contract has the tokens now
       expect(await usdc.balanceOf(await bounties.getAddress())).to.be.eq(amount);
+    });
+
+    it("should collect service fees", async () => {
+      const { bounties, issuer, usdc } = await bountiesFixture();
+      const amount = ethers.toBigInt(5);
+      const serviceFee = await bounties.serviceFee();
+      const expectedFee = amount * serviceFee / ethers.toBigInt(100);
+
+      // when
+      await usdc.connect(issuer).approve(await bounties.getAddress(), amount);
+      await bounties.connect(issuer).postBounty("1", "gitgig-io/ragnar", "123", await usdc.getAddress(), amount);
+
+      // then
+      // ensure the smart contract has the tokens now
+      expect(await usdc.balanceOf(await bounties.getAddress())).to.be.eq(amount);
+      expect(await bounties.fees(await usdc.getAddress())).to.be.eq(expectedFee);
     });
 
     it("should not be able to post bounty with unsupported token", async () => {
@@ -169,7 +204,7 @@ describe("Bounties", () => {
       await executeMaintainerClaim();
 
       // then
-      const expectedAmount = amount * MAINTAINER_RATIO;
+      const expectedAmount = await maintainerFee(bounties, amount);
       expect(await usdc.balanceOf(await maintainer.getAddress())).to.be.eq(expectedAmount);
     });
 
@@ -179,7 +214,7 @@ describe("Bounties", () => {
       // post bounty
       const amount = 500;
       await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, usdc });
-      const expectedAmount = amount * MAINTAINER_RATIO;
+      const expectedAmount = await maintainerFee(bounties, amount);
 
       // when
       await expect(executeMaintainerClaim()).to.emit(bounties, "BountyClaimed").withArgs(
@@ -273,7 +308,7 @@ describe("Bounties", () => {
       await bounties.connect(contributor).contributorClaim(platformId, repoId, issueId);
 
       // then
-      const expectedAmount = amount * CONTRIBUTOR_RATIO;
+      const expectedAmount = await bountyAmountAfterFees(bounties, amount);
       expect(await usdc.balanceOf(await contributor.getAddress())).to.be.eq(expectedAmount);
     });
 
@@ -299,7 +334,7 @@ describe("Bounties", () => {
       });
 
       // when/then
-      const expectedAmount = amount * CONTRIBUTOR_RATIO;
+      const expectedAmount = await bountyAmountAfterFees(bounties, amount);
       await expect(bounties.connect(contributor).contributorClaim(platformId, repoId, issueId)).to.emit(bounties, "BountyClaimed").withArgs(
         platformId,
         repoId,
@@ -320,7 +355,7 @@ describe("Bounties", () => {
       // post bounty
       const amount = 500;
       await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, usdc });
-      const contributorAmount = amount * CONTRIBUTOR_RATIO / contributorUserIds.length;
+      const contributorAmount = await bountyAmountAfterFeesPerContributor(bounties, amount, contributorUserIds.length);
 
       // maintainer claim
       await executeMaintainerClaim();
@@ -355,7 +390,7 @@ describe("Bounties", () => {
       // post bounty
       const amount = 500;
       await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, usdc });
-      const contributorAmount = amount * CONTRIBUTOR_RATIO / contributorUserIds.length;
+      const contributorAmount = await bountyAmountAfterFeesPerContributor(bounties, amount, contributorUserIds.length);
 
       // maintainer claim
       await executeMaintainerClaim();
@@ -390,7 +425,7 @@ describe("Bounties", () => {
       // post bounty
       const amount = 500;
       await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, usdc });
-      const contributorAmount = amount * CONTRIBUTOR_RATIO / contributorUserIds.length;
+      const contributorAmount = await bountyAmountAfterFeesPerContributor(bounties, amount, contributorUserIds.length);
 
       // maintainer claim
       await executeMaintainerClaim();
@@ -464,7 +499,7 @@ describe("Bounties", () => {
 
       // then
       await expect(bounties.connect(contributor).contributorClaim(platformId, repoId, issueId)).to.be.revertedWith("You have already claimed bounty");
-      const expectedAmount = amount * CONTRIBUTOR_RATIO;
+      const expectedAmount = await bountyAmountAfterFees(bounties, amount);
       expect(await usdc.balanceOf(await contributor.getAddress())).to.be.eq(expectedAmount);
     });
   });
