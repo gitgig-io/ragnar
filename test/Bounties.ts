@@ -6,7 +6,7 @@ import { Bounties, Identity, TestUsdc } from "../typechain-types";
 
 describe("Bounties", () => {
   async function bountiesFixture() {
-    const [_owner, oracle, signer, issuer, maintainer, contributor, contributor2, contributor3] = await ethers.getSigners();
+    const [_owner, finance, signer, issuer, maintainer, contributor, contributor2, contributor3] = await ethers.getSigners();
 
     const TestUsdcFactory = await ethers.getContractFactory("TestUsdc");
     const usdc = await TestUsdcFactory.deploy(1_000_000, issuer.address);
@@ -16,8 +16,8 @@ describe("Bounties", () => {
     const identity = await IdentityFactory.deploy(signer.address);
 
     const BountiesFactory = await ethers.getContractFactory("Bounties");
-    const bounties = await BountiesFactory.deploy(oracle.address, signer.address, await identity.getAddress(), [usdcAddr]);
-    return { bounties, identity, usdc, oracle, signer, issuer, maintainer, contributor, contributor2, contributor3 };
+    const bounties = await BountiesFactory.deploy(finance.address, signer.address, await identity.getAddress(), [usdcAddr]);
+    return { bounties, identity, usdc, finance, signer, issuer, maintainer, contributor, contributor2, contributor3 };
   }
 
   async function claimableBountyFixture(contributorIds?: string[]) {
@@ -86,6 +86,11 @@ describe("Bounties", () => {
     const maintainerFee = ethers.toNumber(await bounties.maintainerFee());
     const amountAfterServiceFee = amount - (serviceFee * amount / 100);
     return (maintainerFee * amountAfterServiceFee / 100);
+  }
+
+  async function serviceFee(bounties: Bounties, amount: number) {
+    const serviceFee = ethers.toNumber(await bounties.serviceFee());
+    return (serviceFee * amount / 100);
   }
 
   async function bountyAmountAfterFees(bounties: Bounties, postedAmount: number) {
@@ -171,6 +176,7 @@ describe("Bounties", () => {
       const { bounties, issuer, usdc } = await bountiesFixture();
       const amount = 5;
 
+      const fee = await serviceFee(bounties, amount);
       await usdc.connect(issuer).approve(await bounties.getAddress(), amount);
       await expect(bounties.connect(issuer).postBounty("1", "gitgig-io/ragnar", "123", await usdc.getAddress(), amount)).to.emit(bounties, "BountyCreated").withArgs(
         "1",
@@ -181,6 +187,7 @@ describe("Bounties", () => {
         "USDC",
         6,
         amount,
+        fee
       )
     });
   });
@@ -501,6 +508,63 @@ describe("Bounties", () => {
       await expect(bounties.connect(contributor).contributorClaim(platformId, repoId, issueId)).to.be.revertedWith("You have already claimed bounty");
       const expectedAmount = await bountyAmountAfterFees(bounties, amount);
       expect(await usdc.balanceOf(await contributor.getAddress())).to.be.eq(expectedAmount);
+    });
+  });
+
+  describe("WithdrawFees", () => {
+    it('should allow finance team to withdraw', async () => {
+      const { bounties, platformId, repoId, issueId, issuer, usdc, finance } = await claimableLinkedBountyFixture();
+      const amount = 500;
+      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, usdc });
+
+      // when
+      await bounties.connect(finance).withdrawFees();
+
+      // then
+      const expectedFee = await serviceFee(bounties, amount);
+      expect(await usdc.balanceOf(await finance.getAddress())).to.be.eq(expectedFee);
+    });
+
+    it('should zero out fees in contract after withdraw', async () => {
+      const { bounties, platformId, repoId, issueId, issuer, usdc, finance } = await claimableLinkedBountyFixture();
+      const amount = 500;
+      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, usdc });
+
+      // when
+      await bounties.connect(finance).withdrawFees();
+
+      // then
+      expect(await bounties.fees(await usdc.getAddress())).to.be.eq(0);
+    });
+
+    it('should revert when attempted by non-finance team', async () => {
+      const { bounties, platformId, repoId, issueId, issuer, usdc } = await claimableLinkedBountyFixture();
+      const amount = 500;
+      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, usdc });
+
+      // when/then
+      await expect(bounties.connect(issuer).withdrawFees()).to.be.revertedWith("You are not the finance team");
+    });
+
+    it('should emit FeesWithdrawn event', async () => {
+      const { bounties, platformId, repoId, issueId, issuer, usdc, finance } = await claimableLinkedBountyFixture();
+      const amount = 500;
+      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, usdc });
+      const expectedFee = await serviceFee(bounties, amount);
+
+      // when / then
+      await expect(bounties.connect(finance).withdrawFees()).to.emit(bounties, "FeesWithdrawn").withArgs(
+        await usdc.getAddress(),
+        await usdc.symbol(),
+        await usdc.decimals(),
+        finance.address,
+        expectedFee
+      );
+    });
+
+    it('should not emit FeesWithdrawn event when no fees', async () => {
+      const { bounties, platformId, repoId, issueId, issuer, usdc, finance } = await claimableLinkedBountyFixture();
+      await expect(bounties.connect(finance).withdrawFees()).to.not.emit(bounties, "FeesWithdrawn");
     });
   });
 

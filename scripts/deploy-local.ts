@@ -2,11 +2,13 @@ import { ethers } from "hardhat";
 import fs from "fs";
 
 async function main() {
-  const [_owner, oracle, signer, issuer] = await ethers.getSigners();
+  const [owner, finance, signer, issuer] = await ethers.getSigners();
 
   console.log('----- ACCOUNTS -----');
+  console.log(`Owner: ${await owner.getAddress()}`);
+  console.log(`Finance: ${await finance.getAddress()}`);
   console.log(`Signer: ${await signer.getAddress()}`);
-  console.log(`Issuer: ${await signer.getAddress()}`);
+  console.log(`Issuer: ${await issuer.getAddress()}`);
   console.log('--------------------');
 
   const usdc = await ethers.deployContract("TestUsdc", [1_000_000, await issuer.getAddress()]);
@@ -18,7 +20,7 @@ async function main() {
   console.log(`Identity: ${identityAddress}`);
 
   const bounties = await ethers.deployContract("Bounties", [
-    await oracle.getAddress(),
+    await finance.getAddress(),
     await signer.getAddress(),
     await identity.getAddress(),
     [await usdc.getAddress()]

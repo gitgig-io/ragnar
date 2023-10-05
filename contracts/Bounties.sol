@@ -20,7 +20,8 @@ contract Bounties {
         address token,
         string symbol,
         uint8 decimals,
-        uint256 amount
+        uint256 amount,
+        uint256 fee
     );
 
     event IssueClosed(
@@ -42,11 +43,20 @@ contract Bounties {
         uint256 amount
     );
 
+    event FeesWithdrawn(
+        address token,
+        string symbol,
+        uint8 decimals,
+        address recipient,
+        uint256 amount
+    );
+
+    // TODO: make this changeable by the owner
+    // for verifying signatures
     address public signer;
 
-    // TODO: remove the oracle since it shouldn't be needed anymore
-    // TODO: should probably have a setter to update this
-    address public oracle;
+    // TODO: make this changeable by the owner
+    address public finance;
 
     // TODO: make this changeable by the owner
     address public identityContract;
@@ -76,25 +86,22 @@ contract Bounties {
         public claimed;
 
     constructor(
-        address _oracle,
+        address _finance,
         address _signer,
         address _identityContract,
         address[] memory _supportedTokens
     ) {
         signer = _signer;
         identityContract = _identityContract;
-        oracle = _oracle;
+        finance = _finance;
         supportedTokens = _supportedTokens;
         for (uint256 i = 0; i < _supportedTokens.length; i++) {
             isSupportedToken[_supportedTokens[i]] = true;
         }
     }
 
-    modifier oracleOnly() {
-        require(
-            msg.sender == oracle,
-            "This function is restricted to the oracle"
-        );
+    modifier financeOnly() {
+        require(finance == msg.sender, "You are not the finance team");
         _;
     }
 
@@ -187,7 +194,8 @@ contract Bounties {
             _tokenContract,
             ERC20(_tokenContract).symbol(),
             ERC20(_tokenContract).decimals(),
-            _amount
+            _amount,
+            _fee
         );
         // TOOD: what if the issue was already closed be we aren't tracking it??? FE could check...
     }
@@ -302,7 +310,6 @@ contract Bounties {
             100;
     }
 
-    // TODO: a percent of each bounty to the maintainer and include a fee for the _platform
     function contributorClaim(
         string memory _platformId,
         string memory _repoId,
@@ -360,6 +367,26 @@ contract Bounties {
                     ERC20(_tokenContract).symbol(),
                     ERC20(_tokenContract).decimals(),
                     _resolverAmount
+                );
+            }
+        }
+    }
+
+    function withdrawFees() public financeOnly {
+        for (uint256 i = 0; i < supportedTokens.length; i++) {
+            address _recipient = msg.sender;
+            uint256 _amount = fees[supportedTokens[i]];
+
+            if (_amount > 0) {
+                IERC20(supportedTokens[i]).transfer(_recipient, _amount);
+                fees[supportedTokens[i]] -= _amount;
+
+                emit FeesWithdrawn(
+                    supportedTokens[i],
+                    ERC20(supportedTokens[i]).symbol(),
+                    ERC20(supportedTokens[i]).decimals(),
+                    _recipient,
+                    _amount
                 );
             }
         }
