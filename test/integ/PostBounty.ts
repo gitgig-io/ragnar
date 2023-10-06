@@ -5,7 +5,7 @@ import fs from "fs";
 const { bounties: BOUNTIES_ADDR, usdc: USDC_ADDR } = JSON.parse(fs.readFileSync("addresses.json", "utf8"));
 
 async function postBounty() {
-  const [_owner, oracle, issuer, contributor] = await ethers.getSigners();
+  const [_owner, _finance, _signer, issuer] = await ethers.getSigners();
 
   const TestUsdcFactory = await ethers.getContractFactory("TestUsdc");
   const usdc = TestUsdcFactory.attach(USDC_ADDR);

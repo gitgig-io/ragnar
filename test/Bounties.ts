@@ -243,8 +243,16 @@ describe("Bounties", () => {
     });
 
     it("should emit issue closed event", async () => {
-      const { bounties, executeMaintainerClaim } = await claimableLinkedBountyFixture();
-      await expect(executeMaintainerClaim()).to.emit(bounties, "IssueClosed");
+      const { bounties, executeMaintainerClaim, platformId, repoId, issueId, maintainer, maintainerUserId } = await claimableLinkedBountyFixture();
+      await expect(executeMaintainerClaim()).to.emit(bounties, "IssueTransition").withArgs(
+        platformId,
+        repoId,
+        issueId,
+        "closed",
+        "open",
+        maintainerUserId,
+        await maintainer.getAddress()
+      );
     });
 
     it("should revert if maintainer has not linked identity", async () => {

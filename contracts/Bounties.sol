@@ -24,10 +24,12 @@ contract Bounties {
         uint256 fee
     );
 
-    event IssueClosed(
+    event IssueTransition(
         string platform,
         string repo,
         string issue,
+        string status,
+        string priorStatus,
         string maintainerUserId,
         address maintainerAddress
     );
@@ -254,10 +256,12 @@ contract Bounties {
             resolvers[_platformId][_repoId][_issueId] = _resolverIds;
         }
 
-        emit IssueClosed(
+        emit IssueTransition(
             _platformId,
             _repoId,
             _issueId,
+            "closed",
+            "open",
             _maintainerUserId,
             _maintainerAddress
         );
