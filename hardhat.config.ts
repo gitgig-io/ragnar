@@ -13,6 +13,9 @@ const config: HardhatUserConfig = {
     goerli: {
       url: GOERLI_RPC_URL,
       accounts: [GOERLI_OWNER_KEY!]
+    },
+    hardhat: {
+      chainId: 1337
     }
   }
 };
