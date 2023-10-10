@@ -15,7 +15,12 @@ async function postBounty() {
 
   // const tx = await bounties.test();
 
-  const amount = 5;
+  const contributorUserId = "contributor1";
+  const maintainerUserId = "maintainer1";
+  const maintainerUsername = "coder1";
+
+  // post bounty
+  const amount = 5000;
   await usdc.connect(issuer).approve(await bounties.getAddress(), amount);
   const tx = await bounties.connect(issuer).postBounty("1", "gitgig-io/ragnar", "123", await usdc.getAddress(), amount);
   console.log(tx.hash);
