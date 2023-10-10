@@ -49,8 +49,14 @@
       {
         "indexed": false,
         "internalType": "address",
-        "name": "maintainer",
+        "name": "claimer",
         "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "role",
+        "type": "string"
       },
       {
         "indexed": false,
