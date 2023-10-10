@@ -31,6 +31,16 @@ describe("Identity", () => {
       expect(txn.hash).to.be.a.string;
     });
 
+    it("should emit an IdentityUpdate event", async () => {
+      // given
+      const { identity, signer, user } = await identityFixture();
+      const params = [user.address, "1", "123", "coder1"];
+      const signature = await mintSignature(params, signer);
+
+      // when/then
+      expect(await identity.mint(params[0], params[1], params[2], params[3], signature)).to.emit(identity, "IdentityUpdate").withArgs(params);
+    });
+
     it("fails to mint identity NFT with invalid signature", async () => {
       const { identity, user } = await identityFixture();
       const params = [user.address, "1", "123", "coder1"];

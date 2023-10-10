@@ -18,6 +18,13 @@ contract Identity is IIdentity, ERC721URIStorage {
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
 
+    event IdentityUpdate(
+        address wallet,
+        string platformId,
+        string platformUserId,
+        string platformUsername
+    );
+
     string constant MSGPREFIX = "\x19Ethereum Signed Message:\n";
 
     bytes4 internal constant MAGICVALUE = 0x1626ba7e;
@@ -80,7 +87,12 @@ contract Identity is IIdentity, ERC721URIStorage {
 
         walletForPlatformUser[_platformId][_platformUserId] = _userAddress;
 
-        // TODO: emit wallet association event
+        emit IdentityUpdate(
+            _userAddress,
+            _platformId,
+            _platformUserId,
+            _platformUsername
+        );
     }
 
     function getTokenURI(string memory platformId, uint256 tokenId)
