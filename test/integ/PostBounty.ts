@@ -22,6 +22,8 @@ async function postBounty() {
   const issueId = Math.floor(Math.random() * 10000).toString()
 
   const contributorUserId = "contributor1";
+  const contributorUsername = "coder2";
+
   const maintainerUserId = "maintainer1";
   const maintainerUsername = "coder1";
 
@@ -48,6 +50,20 @@ async function postBounty() {
   const claimSignature = await maintainerClaimSignature(claimParams, signer);
   const { maintainerClaim } = bounties.connect(maintainer);
   await maintainerClaim.apply(maintainerClaim, [...claimParams, claimSignature]);
+
+  await new Promise(r => setTimeout(r, 1000));
+
+  // contributor link
+  if (await identity.balanceOf(contributor.address) > 0) {
+    console.log('contributor already linked');
+  } else {
+    const mintParams = [contributor.address, platformId, contributorUserId, contributorUsername];
+    const mintSig = await mintSignature(mintParams, signer);
+    const { mint } = identity.connect(contributor);
+    await mint.apply(mint, [...mintParams, mintSig] as any);
+  }
+
+  await bounties.connect(contributor).contributorClaim(platformId, repoId, issueId);
 }
 
 async function main() {
