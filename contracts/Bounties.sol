@@ -11,7 +11,7 @@ import "./IIdentity.sol";
 
 contract Bounties {
     // TODO: which fields should be indexed?
-    event BountyCreated(
+    event BountyCreate(
         string platform,
         string repo,
         // TODO: should this be a string?
@@ -34,7 +34,7 @@ contract Bounties {
         address maintainerAddress
     );
 
-    event BountyClaimed(
+    event BountyClaim(
         string platform,
         string repo,
         string issue,
@@ -45,7 +45,7 @@ contract Bounties {
         uint256 amount
     );
 
-    event FeesWithdrawn(
+    event FeeWithdraw(
         address token,
         string symbol,
         uint8 decimals,
@@ -188,7 +188,7 @@ contract Bounties {
         // transfer tokens from the msg sender to this contract and record the bounty amount
         IERC20(_tokenContract).transferFrom(msg.sender, address(this), _amount);
 
-        emit BountyCreated(
+        emit BountyCreate(
             _platform,
             _repoId,
             _issueId,
@@ -288,7 +288,7 @@ contract Bounties {
                     supportedTokens[index]
                 ] -= amount;
 
-                emit BountyClaimed(
+                emit BountyClaim(
                     _platformId,
                     _repoId,
                     _issueId,
@@ -362,7 +362,7 @@ contract Bounties {
                     _tokenContract
                 ] -= _resolverAmount;
 
-                emit BountyClaimed(
+                emit BountyClaim(
                     _platformId,
                     _repoId,
                     _issueId,
@@ -385,7 +385,7 @@ contract Bounties {
                 IERC20(supportedTokens[i]).transfer(_recipient, _amount);
                 fees[supportedTokens[i]] -= _amount;
 
-                emit FeesWithdrawn(
+                emit FeeWithdraw(
                     supportedTokens[i],
                     ERC20(supportedTokens[i]).symbol(),
                     ERC20(supportedTokens[i]).decimals(),
