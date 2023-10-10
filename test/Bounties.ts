@@ -186,7 +186,7 @@ describe("Bounties", () => {
         await usdc.getAddress(),
         "USDC",
         6,
-        amount,
+        amount - fee,
         fee
       )
     });

@@ -196,7 +196,7 @@ contract Bounties {
             _tokenContract,
             ERC20(_tokenContract).symbol(),
             ERC20(_tokenContract).decimals(),
-            _amount,
+            _bountyAmount,
             _fee
         );
         // TOOD: what if the issue was already closed be we aren't tracking it??? FE could check...
