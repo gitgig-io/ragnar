@@ -6,7 +6,7 @@ import { maintainerClaimSignature, mintSignature } from "../helpers/signatureHel
 const { bounties: BOUNTIES_ADDR, usdc: USDC_ADDR, identity: IDENTITY_ADDR } = JSON.parse(fs.readFileSync("addresses.json", "utf8"));
 
 async function postBounty() {
-  const [_owner, _finance, signer, issuer, maintainer, contributor] = await ethers.getSigners();
+  const [_owner, finance, signer, issuer, maintainer, contributor] = await ethers.getSigners();
 
   const TestUsdcFactory = await ethers.getContractFactory("TestUsdc");
   const usdc = TestUsdcFactory.attach(USDC_ADDR);
@@ -64,6 +64,11 @@ async function postBounty() {
   }
 
   await bounties.connect(contributor).contributorClaim(platformId, repoId, issueId);
+
+  await new Promise(r => setTimeout(r, 1000));
+
+  // withdraw fees
+  await bounties.connect(finance).withdrawFees();
 }
 
 async function main() {

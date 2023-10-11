@@ -18,6 +18,7 @@ contract Identity is IIdentity, ERC721URIStorage {
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
 
+    // TODO: should token id be a part of this?
     event IdentityUpdate(
         address wallet,
         string platform,
