@@ -5,14 +5,23 @@ import env from "dotenv";
 
 env.config();
 
-const { GOERLI_OWNER_KEY, GOERLI_RPC_URL } = process.env;
+const {
+  GOERLI_OWNER_KEY,
+  GOERLI_FINANCE_KEY,
+  GOERLI_SIGNER_KEY,
+  GOERLI_RPC_URL
+} = process.env;
 
 const config: HardhatUserConfig = {
   solidity: "0.8.19",
   networks: {
     goerli: {
       url: GOERLI_RPC_URL,
-      accounts: [GOERLI_OWNER_KEY!]
+      accounts: [
+        GOERLI_OWNER_KEY!,
+        GOERLI_FINANCE_KEY!,
+        GOERLI_SIGNER_KEY!
+      ]
     },
     hardhat: {
       chainId: 1337
