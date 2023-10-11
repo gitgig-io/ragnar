@@ -20,7 +20,7 @@ contract Identity is IIdentity, ERC721URIStorage {
 
     event IdentityUpdate(
         address wallet,
-        string platformId,
+        string platform,
         string platformUserId,
         string platformUsername
     );

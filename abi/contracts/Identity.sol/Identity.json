@@ -91,7 +91,7 @@
       {
         "indexed": false,
         "internalType": "string",
-        "name": "platformId",
+        "name": "platform",
         "type": "string"
       },
       {
