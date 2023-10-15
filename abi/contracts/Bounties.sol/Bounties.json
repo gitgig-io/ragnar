@@ -228,6 +228,12 @@
         "internalType": "address",
         "name": "maintainerAddress",
         "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "string[]",
+        "name": "resolvers",
+        "type": "string[]"
       }
     ],
     "name": "IssueTransition",
