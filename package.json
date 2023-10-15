@@ -8,6 +8,7 @@
     "deploy:local": "hardhat run --network localhost scripts/deploy-local.ts",
     "deploy:arb-goerli": "hardhat run --network goerli scripts/deploy-arb-goerli.ts",
     "node": "hardhat node",
+    "fullflow:local": "hardhat run --network localhost test/integ/FullFlow.ts",
     "postbounty:local": "hardhat run --network localhost test/integ/PostBounty.ts",
     "postbounty:arb-goerli": "hardhat run --network goerli test/integ/PostBounty-Arb-Goerli.ts",
     "test": "hardhat test test/*.ts"

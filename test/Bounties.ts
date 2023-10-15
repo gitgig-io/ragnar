@@ -244,7 +244,7 @@ describe("Bounties", () => {
     });
 
     it("should emit issue closed event", async () => {
-      const { bounties, executeMaintainerClaim, platformId, repoId, issueId, maintainer, maintainerUserId } = await claimableLinkedBountyFixture();
+      const { bounties, contributorUserIds, executeMaintainerClaim, platformId, repoId, issueId, maintainer, maintainerUserId } = await claimableLinkedBountyFixture();
       await expect(executeMaintainerClaim()).to.emit(bounties, "IssueTransition").withArgs(
         platformId,
         repoId,
@@ -252,7 +252,8 @@ describe("Bounties", () => {
         "closed",
         "open",
         maintainerUserId,
-        await maintainer.getAddress()
+        await maintainer.getAddress(),
+        contributorUserIds
       );
     });
 

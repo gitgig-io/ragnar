@@ -31,7 +31,8 @@ contract Bounties {
         string status,
         string priorStatus,
         string maintainerUserId,
-        address maintainerAddress
+        address maintainerAddress,
+        string[] resolvers
     );
 
     event BountyClaim(
@@ -264,7 +265,8 @@ contract Bounties {
             "closed",
             "open",
             _maintainerUserId,
-            _maintainerAddress
+            _maintainerAddress,
+            _resolverIds
         );
 
         // 3. For each token...
