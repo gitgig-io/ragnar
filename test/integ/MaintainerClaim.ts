@@ -2,15 +2,10 @@ import { ethers } from "hardhat";
 import fs from "fs";
 import { maintainerClaimSignature, mintSignature } from "../helpers/signatureHelpers";
 
-import * as readline from 'node:readline/promises';
-import { stdin as input, stdout as output } from 'node:process';
-
 // read addresses from file
 const { bounties: BOUNTIES_ADDR, usdc: USDC_ADDR, identity: IDENTITY_ADDR } = JSON.parse(fs.readFileSync("addresses.json", "utf8"));
 
-const { ISSUE_ID } = process.env;
-
-async function execute(issueId: string) {
+async function execute() {
   const [_owner, finance, signer, issuer, maintainer, contributor] = await ethers.getSigners();
 
   const TestUsdcFactory = await ethers.getContractFactory("TestUsdc");
@@ -24,23 +19,17 @@ async function execute(issueId: string) {
 
   const platformId = "1";
   const repoId = "gitgig-io/demo";
-  // const issueId = "5";
+  const issueId = "3";
 
   const stocksUserId = "188319";
   const stocksUsername = "stocks29";
 
   const brennanUserId = "11755751";
-  const brennanUsername = "brennan3";
 
   const contributorUserId = brennanUserId;
-  const contributorUsername = brennanUsername;
 
   const maintainerUserId = stocksUserId;
   const maintainerUsername = stocksUsername;
-
-  const rl = readline.createInterface({ input, output });
-
-  await rl.question("Next step: create bounty. Press enter to continue");
 
   // post bounty
   const amount = 5000;
@@ -48,7 +37,7 @@ async function execute(issueId: string) {
   const tx = await bounties.connect(issuer).postBounty(platformId, repoId, issueId, await usdc.getAddress(), amount);
   console.log(tx.hash);
 
-  await rl.question("Next step: maintainer claim. Press enter to continue");
+  await new Promise(r => setTimeout(r, 1000));
 
   // maintainer link
   if (await identity.balanceOf(maintainer.address) > 0) {
@@ -65,33 +54,10 @@ async function execute(issueId: string) {
   const claimSignature = await maintainerClaimSignature(claimParams, signer);
   const { maintainerClaim } = bounties.connect(maintainer);
   await maintainerClaim.apply(maintainerClaim, [...claimParams, claimSignature]);
-
-  await rl.question("Next step: contributor claim. Press enter to continue");
-
-  // contributor link
-  if (await identity.balanceOf(contributor.address) > 0) {
-    console.log('contributor already linked');
-  } else {
-    const mintParams = [contributor.address, platformId, contributorUserId, contributorUsername];
-    const mintSig = await mintSignature(mintParams, signer);
-    const { mint } = identity.connect(contributor);
-    await mint.apply(mint, [...mintParams, mintSig] as any);
-  }
-
-  await bounties.connect(contributor).contributorClaim(platformId, repoId, issueId);
-
-  await rl.question("Next step: fee withdraw. Press enter to continue");
-
-  // withdraw fees
-  await bounties.connect(finance).withdrawFees();
 }
 
 async function main() {
-  if (!ISSUE_ID) {
-    throw new Error("ISSUE_ID not set");
-  }
-
-  await execute(ISSUE_ID);
+  await execute();
 }
 
 main();
