@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.9;
+pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import "./IIdentity.sol";
 
 // TODO: remove these
@@ -10,6 +12,9 @@ import "./IIdentity.sol";
 // import "hardhat/console.sol";
 
 contract Bounties {
+    using ECDSA for bytes32;
+    using MessageHashUtils for bytes32;
+
     // TODO: which fields should be indexed?
     event BountyCreate(
         string platform,
@@ -240,9 +245,7 @@ contract Bounties {
             );
             bytes32 _messageHash = keccak256(_data);
             // console.log("_messageHash: ", toHex(_messageHash));
-            bytes32 _ethMessageHash = ECDSA.toEthSignedMessageHash(
-                _messageHash
-            );
+            bytes32 _ethMessageHash = _messageHash.toEthSignedMessageHash();
             // console.log("_ethMessageHash: ", toHex(_ethMessageHash));
 
             require(

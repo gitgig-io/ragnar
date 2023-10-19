@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.9;
+pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import "@openzeppelin/contracts/utils/Counters.sol";
+import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts/utils/Base64.sol";
 import "./IIdentity.sol";
@@ -12,11 +12,12 @@ import "./IIdentity.sol";
 import "hardhat/console.sol";
 
 // TODO: should this be a proxy??
-contract Identity is IIdentity, ERC721URIStorage {
-    using ECDSA for bytes32;
+contract Identity is IIdentity, ERC721Enumerable {
     using Strings for uint256;
-    using Counters for Counters.Counter;
-    Counters.Counter private _tokenIds;
+    using ECDSA for bytes32;
+    using MessageHashUtils for bytes32;
+
+    uint256 private nextTokenId;
 
     // TODO: should token id be a part of this?
     event IdentityUpdate(
@@ -43,13 +44,13 @@ contract Identity is IIdentity, ERC721URIStorage {
         signer = _signer;
     }
 
-    modifier validLinkSignature(
+    function _validLinkSignature(
         address _userAddress,
         string memory _platformId,
         string memory _platformUserId,
         string memory _platformUsername,
         bytes memory _signature
-    ) {
+    ) private view {
         bytes memory _data = abi.encode(
             _userAddress,
             _platformId,
@@ -57,7 +58,7 @@ contract Identity is IIdentity, ERC721URIStorage {
             _platformUsername
         );
         bytes32 _messageHash = keccak256(_data);
-        bytes32 _ethMessageHash = ECDSA.toEthSignedMessageHash(_messageHash);
+        bytes32 _ethMessageHash = _messageHash.toEthSignedMessageHash();
 
         require(
             SignatureChecker.isValidSignatureNow(
@@ -67,8 +68,6 @@ contract Identity is IIdentity, ERC721URIStorage {
             ),
             "Invalid signature"
         );
-
-        _;
     }
 
     // TODO: probably need a function for users to drop their wallet association
@@ -84,25 +83,22 @@ contract Identity is IIdentity, ERC721URIStorage {
         string memory _platformUserId,
         string memory _platformUsername,
         bytes memory _signature
-    )
-        public
-        validLinkSignature(
+    ) public {
+        _validLinkSignature(
             _userAddress,
             _platformId,
             _platformUserId,
             _platformUsername,
             _signature
-        )
-    {
+        );
         require(balanceOf(_userAddress) < 1, "Already minted");
 
         // TODO: ensure the platformUserId does not already have an existing wallet
 
         // TODO: extract data and set appropriate nft attributes
         // TODO: should we allow off-chain metadata extensions via a uri?
-        _tokenIds.increment();
-        uint256 tokenId = _tokenIds.current();
-        _safeMint(_userAddress, tokenId);
+        uint256 _tokenId = nextTokenId++;
+        _safeMint(_userAddress, _tokenId);
         // _setTokenURI(newItemId, getTokenURI(_platformId, newItemId));
 
         walletForPlatformUser[_platformId][_platformUserId] = _userAddress;
@@ -115,24 +111,31 @@ contract Identity is IIdentity, ERC721URIStorage {
         );
     }
 
-    function update(
+    function transfer(
         address _userAddress,
         string memory _platformId,
         string memory _platformUserId,
         string memory _platformUsername,
         bytes memory _signature
-    )
-        public
-        validLinkSignature(
+    ) public {
+        _validLinkSignature(
             _userAddress,
             _platformId,
             _platformUserId,
             _platformUsername,
             _signature
-        )
-    {
-        require(balanceOf(_userAddress) > 0, "No identity to update");
+        );
+        address priorAddress = walletForPlatformUser[_platformId][
+            _platformUserId
+        ];
 
+        require(priorAddress != address(0), "No identity to update");
+
+        // transfer the token to the new wallet
+        uint256 _tokenId = tokenOfOwnerByIndex(priorAddress, 0);
+        _update(_userAddress, _tokenId, address(0));
+
+        // update the address of the platform user
         walletForPlatformUser[_platformId][_platformUserId] = _userAddress;
 
         emit IdentityUpdate(
