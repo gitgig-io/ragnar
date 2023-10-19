@@ -506,6 +506,39 @@
   {
     "inputs": [
       {
+        "internalType": "address",
+        "name": "_userAddress",
+        "type": "address"
+      },
+      {
+        "internalType": "string",
+        "name": "_platformId",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "_platformUserId",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "_platformUsername",
+        "type": "string"
+      },
+      {
+        "internalType": "bytes",
+        "name": "_signature",
+        "type": "bytes"
+      }
+    ],
+    "name": "update",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "string",
         "name": "",
         "type": "string"
