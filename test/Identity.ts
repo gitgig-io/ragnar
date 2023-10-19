@@ -4,10 +4,10 @@ import { mintSignature } from "./helpers/signatureHelpers";
 
 describe("Identity", () => {
   async function identityFixture() {
-    const [owner, signer, user] = await ethers.getSigners();
+    const [owner, signer, user, user2] = await ethers.getSigners();
     const IdentityFactory = await ethers.getContractFactory("Identity");
     const identity = await IdentityFactory.deploy(signer.address);
-    return { identity, signer, owner, user };
+    return { identity, signer, owner, user, user2 };
   }
 
   describe("Deployment", () => {
@@ -104,4 +104,59 @@ describe("Identity", () => {
     //   console.log('wallet signature: ', signature);
     // });
   });
+
+  describe("Update", () => {
+    async function signAndMintFixture() {
+      const fixtures = await identityFixture();
+      const { identity, signer, user, user2 } = fixtures;
+      const params = [user.address, "1", "123", "coder1"];
+      const signature = await mintSignature(params, signer);
+      await identity.mint(params[0], params[1], params[2], params[3], signature);
+      return { ...fixtures, params };
+    }
+
+    it("should be able to update identity NFT", async () => {
+      const { identity, signer, user2, params } = await signAndMintFixture();
+      params[0] = user2.address;
+      const signature = await mintSignature(params, signer);
+
+      // when
+      const txn = await identity.mint(params[0], params[1], params[2], params[3], signature);
+
+      // then
+      expect(txn.hash).to.be.a.string;
+    });
+
+    it("should emit an IdentityUpdate event", async () => {
+      // given
+      const { identity, signer, user2, params } = await signAndMintFixture();
+      params[0] = user2.address;
+      const signature = await mintSignature(params, signer);
+
+      // when/then
+      expect(await identity.mint(params[0], params[1], params[2], params[3], signature)).to.emit(identity, "IdentityUpdate").withArgs(params);
+    });
+
+    it("fails to update identity NFT with invalid signature", async () => {
+      const { identity, signer, user2, params } = await signAndMintFixture();
+      // generate sig with old user address
+      const signature = await mintSignature(params, signer);
+      params[0] = user2.address;
+
+      await expect(identity.mint(params[0], params[1], params[2], params[3], signature)).to.be.revertedWith(
+        "Invalid signature"
+      );
+    });
+
+    it("fails to update identity NFT when not yet minted", async () => {
+      const { identity, signer, user } = await identityFixture();
+      const params = [user.address, "1", "123", "coder1"];
+      const signature = await mintSignature(params, signer);
+
+      // when
+      await expect(identity.update(params[0], params[1], params[2], params[3], signature)).to.be.revertedWith(
+        "No identity to update"
+      );
+    });
+  })
 });

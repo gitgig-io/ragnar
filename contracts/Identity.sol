@@ -43,20 +43,13 @@ contract Identity is IIdentity, ERC721URIStorage {
         signer = _signer;
     }
 
-    // TODO: probably need a function for users to drop their wallet association
-    // if they lost the keys... or just a function to overwrite it.
-
-    // TODO: switch this to EIP-712?? https://eips.ethereum.org/EIPS/eip-712#specification
-    // TODO: do not allow a wallet to mint more than one NFT
-    // TODO: disallow transfers
-
-    function mint(
+    modifier validLinkSignature(
         address _userAddress,
         string memory _platformId,
         string memory _platformUserId,
         string memory _platformUsername,
         bytes memory _signature
-    ) public {
+    ) {
         bytes memory _data = abi.encode(
             _userAddress,
             _platformId,
@@ -75,6 +68,32 @@ contract Identity is IIdentity, ERC721URIStorage {
             "Invalid signature"
         );
 
+        _;
+    }
+
+    // TODO: probably need a function for users to drop their wallet association
+    // if they lost the keys... or just a function to overwrite it.
+
+    // TODO: switch this to EIP-712?? https://eips.ethereum.org/EIPS/eip-712#specification
+    // TODO: do not allow a wallet to mint more than one NFT
+    // TODO: disallow transfers
+
+    function mint(
+        address _userAddress,
+        string memory _platformId,
+        string memory _platformUserId,
+        string memory _platformUsername,
+        bytes memory _signature
+    )
+        public
+        validLinkSignature(
+            _userAddress,
+            _platformId,
+            _platformUserId,
+            _platformUsername,
+            _signature
+        )
+    {
         require(balanceOf(_userAddress) < 1, "Already minted");
 
         // TODO: ensure the platformUserId does not already have an existing wallet
@@ -85,6 +104,34 @@ contract Identity is IIdentity, ERC721URIStorage {
         uint256 tokenId = _tokenIds.current();
         _safeMint(_userAddress, tokenId);
         // _setTokenURI(newItemId, getTokenURI(_platformId, newItemId));
+
+        walletForPlatformUser[_platformId][_platformUserId] = _userAddress;
+
+        emit IdentityUpdate(
+            _userAddress,
+            _platformId,
+            _platformUserId,
+            _platformUsername
+        );
+    }
+
+    function update(
+        address _userAddress,
+        string memory _platformId,
+        string memory _platformUserId,
+        string memory _platformUsername,
+        bytes memory _signature
+    )
+        public
+        validLinkSignature(
+            _userAddress,
+            _platformId,
+            _platformUserId,
+            _platformUsername,
+            _signature
+        )
+    {
+        require(balanceOf(_userAddress) > 0, "No identity to update");
 
         walletForPlatformUser[_platformId][_platformUserId] = _userAddress;
 
