@@ -48,6 +48,8 @@ async function execute(issueId: string) {
   const tx = await bounties.connect(issuer).postBounty(platformId, repoId, issueId, await usdc.getAddress(), amount);
   console.log(tx.hash);
 
+  await rl.question("Close the github issue and then press enter to continue");
+
   await rl.question("Next step: maintainer claim. Press enter to continue");
 
   // maintainer link
@@ -84,6 +86,8 @@ async function execute(issueId: string) {
 
   // withdraw fees
   await bounties.connect(finance).withdrawFees();
+
+  rl.close();
 }
 
 async function main() {
