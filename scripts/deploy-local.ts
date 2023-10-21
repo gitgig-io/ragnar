@@ -11,7 +11,7 @@ async function main() {
   console.log(`Issuer: ${await issuer.getAddress()}`);
   console.log('--------------------');
 
-  const usdc = await ethers.deployContract("TestUsdc", [1_000_000, await issuer.getAddress()]);
+  const usdc = await ethers.deployContract("TestUsdc", [1_000_000_000_000, await issuer.getAddress()]);
   const usdcAddress = await usdc.getAddress();
   console.log(`Test USDC: ${usdcAddress}`);
 
