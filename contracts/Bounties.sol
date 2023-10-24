@@ -60,6 +60,17 @@ contract Bounties {
         uint256 amount
     );
 
+    event BountySweep(
+        address wallet,
+        string platform,
+        string repo,
+        string issue,
+        address token,
+        string symbol,
+        uint8 decimals,
+        uint256 amount
+    );
+
     // for updating the contract configuration
     address public owner;
 
@@ -410,6 +421,44 @@ contract Bounties {
                 );
             }
         }
+    }
+
+    function sweepBounty(
+        string memory _platformId,
+        string memory _repoId,
+        string memory _issueId
+    ) public financeOnly {
+        bool swept = false;
+        for (uint256 index = 0; index < supportedTokens.length; index++) {
+            // get the amount of supported tokens in this bounty
+            uint256 amount = bounties[_platformId][_repoId][_issueId][
+                supportedTokens[index]
+            ];
+
+            if (amount > 0) {
+                // transfer tokens to the message sender (finance)
+                IERC20(supportedTokens[index]).transfer(msg.sender, amount);
+
+                // remove the amount from the bounty
+                bounties[_platformId][_repoId][_issueId][
+                    supportedTokens[index]
+                ] -= amount;
+
+                emit BountySweep(
+                    msg.sender,
+                    _platformId,
+                    _repoId,
+                    _issueId,
+                    supportedTokens[index],
+                    ERC20(supportedTokens[index]).symbol(),
+                    ERC20(supportedTokens[index]).decimals(),
+                    amount
+                );
+
+                swept = true;
+            }
+        }
+        require(swept, "No bounty to sweep");
     }
 
     function isIssueClosed(

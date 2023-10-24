@@ -3,7 +3,6 @@ import { ethers } from "hardhat";
 import { maintainerClaimSignature, mintSignature } from "./helpers/signatureHelpers";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { Bounties, Identity, TestUsdc } from "../typechain-types";
-import { PANIC_CODES } from "@nomicfoundation/hardhat-chai-matchers/panic";
 
 describe("Bounties", () => {
   async function bountiesFixture() {
@@ -575,7 +574,7 @@ describe("Bounties", () => {
     });
 
     it('should not emit FeeWithdraw event when no fees', async () => {
-      const { bounties, platformId, repoId, issueId, issuer, usdc, finance } = await claimableLinkedBountyFixture();
+      const { bounties, finance } = await claimableLinkedBountyFixture();
       await expect(bounties.connect(finance).withdrawFees()).to.not.emit(bounties, "FeeWithdraw");
     });
   });
@@ -749,6 +748,77 @@ describe("Bounties", () => {
   });
 
   describe("SweepBounty", () => {
+    async function sweepableBountyFixture() {
+      const fixtures = await bountiesFixture();
+      const { bounties, issuer, usdc } = fixtures;
 
+      const platformId = "1";
+      const repoId = "gitgig-io/ragnar";
+      const issueId = "123";
+      const amount = 5;
+
+      const serviceFee = ethers.toNumber(await bounties.serviceFee()) * amount / 100;
+      const bountyAmount = amount - serviceFee;
+      await usdc.connect(issuer).approve(await bounties.getAddress(), amount);
+      await bounties.connect(issuer).postBounty(platformId, repoId, issueId, await usdc.getAddress(), amount);
+      expect(await bounties.bounties(platformId, repoId, issueId, await usdc.getAddress())).to.equal(bountyAmount);
+
+      return { ...fixtures, amount, serviceFee, bountyAmount, platformId, repoId, issueId };
+    }
+
+    it('should sweep a bounty', async () => {
+      const { bounties, finance, platformId, repoId, issueId } = await sweepableBountyFixture();
+
+      // when
+      const txn = await bounties.connect(finance).sweepBounty(platformId, repoId, issueId);
+
+      // then
+      expect(txn.hash).to.be.a.string;
+    });
+
+    it('should zero out bounty', async () => {
+      const { bounties, finance, usdc, platformId, repoId, issueId } = await sweepableBountyFixture();
+
+      // when
+      await bounties.connect(finance).sweepBounty(platformId, repoId, issueId);
+
+      // then
+      expect(await bounties.bounties(platformId, repoId, issueId, await usdc.getAddress())).to.equal(0);
+    });
+
+    it('should transfer bounty tokens to message sender', async () => {
+      const { bounties, finance, usdc, bountyAmount, platformId, repoId, issueId } = await sweepableBountyFixture();
+
+      // when
+      await bounties.connect(finance).sweepBounty(platformId, repoId, issueId);
+
+      // then
+      expect(await usdc.balanceOf(await finance.getAddress())).to.equal(bountyAmount);
+    });
+
+    it('should emit BountySweep event', async () => {
+      const { bounties, finance, usdc, bountyAmount, platformId, repoId, issueId } = await sweepableBountyFixture();
+
+      // when/then
+      expect(bounties.connect(finance).sweepBounty(platformId, repoId, issueId)).to.emit(bounties, "BountySweep").withArgs(finance.address, "1", "gitgig-io/ragnar", "123", await usdc.getAddress(), "USDC", 6, bountyAmount);
+    });
+
+
+    it('should revert if not called by finance', async () => {
+      const { bounties, issuer, platformId, repoId, issueId } = await sweepableBountyFixture();
+
+      // when/then
+      await expect(bounties.connect(issuer).sweepBounty(platformId, repoId, issueId)).to.be.revertedWith(
+        "You are not the finance team"
+      );
+    });
+
+    it('should revert if no bounty to sweep', async () => {
+      const { bounties, finance } = await bountiesFixture();
+
+      await expect(bounties.connect(finance).sweepBounty("1", "gitgig-io/ragnar", "123")).to.be.revertedWith(
+        "No bounty to sweep"
+      );
+    });
   });
 });
