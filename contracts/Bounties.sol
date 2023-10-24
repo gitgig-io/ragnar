@@ -60,20 +60,22 @@ contract Bounties {
         uint256 amount
     );
 
-    // TODO: make this changeable by the owner
-    // for verifying signatures
-    address public signer;
+    // for updating the contract configuration
+    address public owner;
 
-    // TODO: make this changeable by the owner
+    // for verifying signatures
+    address public notary;
+
+    // for withdrawing fees
     address public finance;
 
-    // TODO: make this changeable by the owner
+    // the identity contract
     address public identityContract;
 
-    // TODO: make this changeable by the owner
+    // the percentage that the platform charges
     uint8 public serviceFee = 20;
 
-    // TODO: make this changeable by the owner
+    // the percentage that is the maintainer share of a bounty
     uint8 public maintainerFee = 10;
 
     // store the service fees that have accumulated
@@ -96,17 +98,23 @@ contract Bounties {
 
     constructor(
         address _finance,
-        address _signer,
+        address _notary,
         address _identityContract,
         address[] memory _supportedTokens
     ) {
-        signer = _signer;
+        owner = msg.sender;
+        notary = _notary;
         identityContract = _identityContract;
         finance = _finance;
         supportedTokens = _supportedTokens;
         for (uint256 i = 0; i < _supportedTokens.length; i++) {
             isSupportedToken[_supportedTokens[i]] = true;
         }
+    }
+
+    modifier ownerOnly() {
+        require(msg.sender == owner, "You are not the owner");
+        _;
     }
 
     modifier financeOnly() {
@@ -250,7 +258,7 @@ contract Bounties {
 
             require(
                 SignatureChecker.isValidSignatureNow(
-                    signer,
+                    notary,
                     _ethMessageHash,
                     _signature
                 ),
@@ -412,58 +420,39 @@ contract Bounties {
         return resolvers[_platform][_repoId][_issueId].length > 0;
     }
 
-    // TODO: remove these
-    function toHex16(bytes16 data) internal pure returns (bytes32 result) {
-        result =
-            (bytes32(data) &
-                0xFFFFFFFFFFFFFFFF000000000000000000000000000000000000000000000000) |
-            ((bytes32(data) &
-                0x0000000000000000FFFFFFFFFFFFFFFF00000000000000000000000000000000) >>
-                64);
-        result =
-            (result &
-                0xFFFFFFFF000000000000000000000000FFFFFFFF000000000000000000000000) |
-            ((result &
-                0x00000000FFFFFFFF000000000000000000000000FFFFFFFF0000000000000000) >>
-                32);
-        result =
-            (result &
-                0xFFFF000000000000FFFF000000000000FFFF000000000000FFFF000000000000) |
-            ((result &
-                0x0000FFFF000000000000FFFF000000000000FFFF000000000000FFFF00000000) >>
-                16);
-        result =
-            (result &
-                0xFF000000FF000000FF000000FF000000FF000000FF000000FF000000FF000000) |
-            ((result &
-                0x00FF000000FF000000FF000000FF000000FF000000FF000000FF000000FF0000) >>
-                8);
-        result =
-            ((result &
-                0xF000F000F000F000F000F000F000F000F000F000F000F000F000F000F000F000) >>
-                4) |
-            ((result &
-                0x0F000F000F000F000F000F000F000F000F000F000F000F000F000F000F000F00) >>
-                8);
-        result = bytes32(
-            0x3030303030303030303030303030303030303030303030303030303030303030 +
-                uint256(result) +
-                (((uint256(result) +
-                    0x0606060606060606060606060606060606060606060606060606060606060606) >>
-                    4) &
-                    0x0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F) *
-                7
-        );
+    function ownerTransferOwnership(address _newOwner) public ownerOnly {
+        require(_newOwner != address(0), "Cannot transfer to zero address");
+        owner = _newOwner;
     }
 
-    function toHex(bytes32 data) public pure returns (string memory) {
-        return
-            string(
-                abi.encodePacked(
-                    "0x",
-                    toHex16(bytes16(data)),
-                    toHex16(bytes16(data << 128))
-                )
-            );
+    function ownerUpdateNotary(address _newNotary) public ownerOnly {
+        require(_newNotary != address(0), "Cannot update to zero address");
+        notary = _newNotary;
+    }
+
+    function ownerUpdateFinance(address _newFinance) public ownerOnly {
+        require(_newFinance != address(0), "Cannot update to zero address");
+        finance = _newFinance;
+    }
+
+    function ownerUpdateIdentity(address _newIdentity) public ownerOnly {
+        require(_newIdentity != address(0), "Cannot update to zero address");
+        identityContract = _newIdentity;
+    }
+
+    function ownerUpdateServiceFee(uint8 _newServiceFee) public ownerOnly {
+        require(_newServiceFee >= 0 && _newServiceFee <= 100, "Invalid fee");
+        serviceFee = _newServiceFee;
+    }
+
+    function ownerUpdateMaintainerFee(uint8 _newMaintainerFee)
+        public
+        ownerOnly
+    {
+        require(
+            _newMaintainerFee >= 0 && _newMaintainerFee <= 100,
+            "Invalid fee"
+        );
+        maintainerFee = _newMaintainerFee;
     }
 }
