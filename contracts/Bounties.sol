@@ -78,6 +78,15 @@ contract Bounties {
         uint8 decimals
     );
 
+    event ConfigChange(
+        address owner,
+        address notary,
+        address finance,
+        address identityContract,
+        uint8 serviceFee,
+        uint8 maintainerFee
+    );
+
     // for updating the contract configuration
     address public owner;
 
@@ -127,7 +136,23 @@ contract Bounties {
         supportedTokens = _supportedTokens;
         for (uint256 i = 0; i < _supportedTokens.length; i++) {
             isSupportedToken[_supportedTokens[i]] = true;
+
+            emit TokenSupportChange(
+                true,
+                _supportedTokens[i],
+                ERC20(_supportedTokens[i]).symbol(),
+                ERC20(_supportedTokens[i]).decimals()
+            );
         }
+
+        emit ConfigChange(
+            owner,
+            notary,
+            finance,
+            identityContract,
+            serviceFee,
+            maintainerFee
+        );
     }
 
     modifier ownerOnly() {
@@ -475,29 +500,45 @@ contract Bounties {
         return resolvers[_platform][_repoId][_issueId].length > 0;
     }
 
+    function emitConfigChange() internal {
+        emit ConfigChange(
+            owner,
+            notary,
+            finance,
+            identityContract,
+            serviceFee,
+            maintainerFee
+        );
+    }
+
     function ownerTransferOwnership(address _newOwner) public ownerOnly {
         require(_newOwner != address(0), "Cannot transfer to zero address");
         owner = _newOwner;
+        emitConfigChange();
     }
 
     function ownerUpdateNotary(address _newNotary) public ownerOnly {
         require(_newNotary != address(0), "Cannot update to zero address");
         notary = _newNotary;
+        emitConfigChange();
     }
 
     function ownerUpdateFinance(address _newFinance) public ownerOnly {
         require(_newFinance != address(0), "Cannot update to zero address");
         finance = _newFinance;
+        emitConfigChange();
     }
 
     function ownerUpdateIdentity(address _newIdentity) public ownerOnly {
         require(_newIdentity != address(0), "Cannot update to zero address");
         identityContract = _newIdentity;
+        emitConfigChange();
     }
 
     function ownerUpdateServiceFee(uint8 _newServiceFee) public ownerOnly {
         require(_newServiceFee >= 0 && _newServiceFee <= 100, "Invalid fee");
         serviceFee = _newServiceFee;
+        emitConfigChange();
     }
 
     function ownerUpdateMaintainerFee(uint8 _newMaintainerFee)
@@ -509,6 +550,7 @@ contract Bounties {
             "Invalid fee"
         );
         maintainerFee = _newMaintainerFee;
+        emitConfigChange();
     }
 
     function ownerAddSupportedToken(address _newToken) public ownerOnly {
