@@ -6,23 +6,23 @@ import { Bounties, Identity, TestUsdc } from "../typechain-types";
 
 describe("Bounties", () => {
   async function bountiesFixture() {
-    const [owner, finance, signer, issuer, maintainer, contributor, contributor2, contributor3] = await ethers.getSigners();
+    const [owner, finance, notary, issuer, maintainer, contributor, contributor2, contributor3] = await ethers.getSigners();
 
     const TestUsdcFactory = await ethers.getContractFactory("TestUsdc");
     const usdc = await TestUsdcFactory.deploy(1_000_000, issuer.address);
     const usdcAddr = await usdc.getAddress();
 
     const IdentityFactory = await ethers.getContractFactory("Identity");
-    const identity = await IdentityFactory.deploy(signer.address);
+    const identity = await IdentityFactory.deploy(notary.address);
 
     const BountiesFactory = await ethers.getContractFactory("Bounties");
-    const bounties = await BountiesFactory.deploy(finance.address, signer.address, await identity.getAddress(), [usdcAddr]);
-    return { owner, bounties, identity, usdc, finance, signer, issuer, maintainer, contributor, contributor2, contributor3 };
+    const bounties = await BountiesFactory.deploy(finance.address, notary.address, await identity.getAddress(), [usdcAddr]);
+    return { owner, bounties, identity, usdc, finance, notary, issuer, maintainer, contributor, contributor2, contributor3 };
   }
 
   async function claimableBountyFixture(contributorIds?: string[]) {
     const fixtures = await bountiesFixture();
-    const { signer, maintainer, contributor, contributor2, contributor3 } = fixtures;
+    const { notary, maintainer, contributor, contributor2, contributor3 } = fixtures;
 
     const platformId = "1";
     const maintainerUserId = "maintainer1";
@@ -33,7 +33,7 @@ describe("Bounties", () => {
     const contributorUserIds = contributorIds || [contributorUserId];
     const contributorSigners = [contributor, contributor2, contributor3].slice(0, contributorUserIds.length);
     const claimParams = [maintainerUserId, platformId, repoId, issueId, contributorUserIds];
-    const claimSignature = await maintainerClaimSignature(claimParams, signer);
+    const claimSignature = await maintainerClaimSignature(claimParams, notary);
     const { maintainerClaim } = fixtures.bounties.connect(maintainer);
     const executeMaintainerClaim = async () => await maintainerClaim.apply(maintainerClaim, [...claimParams, claimSignature] as any);
 
@@ -46,22 +46,22 @@ describe("Bounties", () => {
     platformUserId: string;
     platformUsername: string;
     participant: HardhatEthersSigner;
-    signer: HardhatEthersSigner;
+    notary: HardhatEthersSigner;
   }
 
-  async function linkIdentity({ identity, platformId, platformUserId, platformUsername, participant, signer }: LinkIdentityProps) {
+  async function linkIdentity({ identity, platformId, platformUserId, platformUsername, participant, notary }: LinkIdentityProps) {
     const mintParams = [participant.address, platformId, platformUserId, platformUsername];
-    const mintSig = await mintSignature(mintParams, signer);
+    const mintSig = await mintSignature(mintParams, notary);
     const { mint } = identity.connect(participant);
     await mint.apply(mint, [...mintParams, mintSig] as any);
   }
 
   async function claimableLinkedBountyFixture(contributorIds?: string[]) {
     const fixtures = await claimableBountyFixture(contributorIds);
-    const { identity, maintainer, signer, platformId, maintainerUserId } = fixtures;
+    const { identity, maintainer, notary, platformId, maintainerUserId } = fixtures;
 
     // map identity for maintainer
-    await linkIdentity({ identity, platformId, platformUserId: maintainerUserId, platformUsername: "coder1", participant: maintainer, signer });
+    await linkIdentity({ identity, platformId, platformUserId: maintainerUserId, platformUsername: "coder1", participant: maintainer, notary });
 
     return fixtures;
   }
@@ -158,15 +158,15 @@ describe("Bounties", () => {
 
     it("should not be able to post bounty on closed issue", async () => {
       // given
-      const { bounties, identity, maintainer, signer, issuer, contributor, usdc } = await bountiesFixture();
+      const { bounties, identity, maintainer, notary, issuer, contributor, usdc } = await bountiesFixture();
       const platformId = "1";
       const maintainerUserId = "m1";
       const claimParams = [maintainerUserId, platformId, "gitgig-io/ragnar", "123", [contributor.address]];
-      const claimSignature = await maintainerClaimSignature(claimParams, signer);
+      const claimSignature = await maintainerClaimSignature(claimParams, notary);
 
       // map identity for maintainer
       const mintParams = [maintainer.address, platformId, maintainerUserId, "coder1"];
-      const mintSig = await mintSignature(mintParams, signer);
+      const mintSig = await mintSignature(mintParams, notary);
       const { mint } = identity.connect(maintainer);
       mint.apply(mint, [...mintParams, mintSig] as any);
 
@@ -270,7 +270,7 @@ describe("Bounties", () => {
 
     it("should revert with invalid signature", async () => {
       const { bounties, claimParams, maintainer } = await claimableLinkedBountyFixture();
-      // signing with maintainer key instead of signer key
+      // signing with maintainer key instead of notary key
       const wrongSignature = await maintainerClaimSignature(claimParams, maintainer);
       const { maintainerClaim } = bounties.connect(maintainer);
       await expect(maintainerClaim.apply(maintainerClaim, [...claimParams, wrongSignature] as any)).to.be.revertedWith("Invalid signature");
@@ -280,7 +280,7 @@ describe("Bounties", () => {
   describe("ContributorClaim", () => {
     it("should allow resolver to claim bounty", async () => {
       // given
-      const { executeMaintainerClaim, identity, usdc, issuer, signer, bounties, platformId, repoId, issueId, contributor, contributorUserId } = await claimableLinkedBountyFixture();
+      const { executeMaintainerClaim, identity, usdc, issuer, notary, bounties, platformId, repoId, issueId, contributor, contributorUserId } = await claimableLinkedBountyFixture();
 
       // post bounty
       const amount = 500;
@@ -296,7 +296,7 @@ describe("Bounties", () => {
         platformUserId: contributorUserId,
         platformUsername: "coder1",
         participant: contributor,
-        signer
+        notary
       });
 
       // when
@@ -308,7 +308,7 @@ describe("Bounties", () => {
 
     it("should claim expected amount", async () => {
       // given
-      const { executeMaintainerClaim, identity, usdc, issuer, signer, bounties, platformId, repoId, issueId, contributor, contributorUserId } = await claimableLinkedBountyFixture();
+      const { executeMaintainerClaim, identity, usdc, issuer, notary, bounties, platformId, repoId, issueId, contributor, contributorUserId } = await claimableLinkedBountyFixture();
 
       // post bounty
       const amount = 500;
@@ -324,7 +324,7 @@ describe("Bounties", () => {
         platformUserId: contributorUserId,
         platformUsername: "coder1",
         participant: contributor,
-        signer
+        notary
       });
 
       // when
@@ -337,7 +337,7 @@ describe("Bounties", () => {
 
     it("should emit claim event", async () => {
       // given
-      const { executeMaintainerClaim, identity, usdc, issuer, signer, bounties, platformId, repoId, issueId, contributor, contributorUserId } = await claimableLinkedBountyFixture();
+      const { executeMaintainerClaim, identity, usdc, issuer, notary, bounties, platformId, repoId, issueId, contributor, contributorUserId } = await claimableLinkedBountyFixture();
 
       // post bounty
       const amount = 500;
@@ -353,7 +353,7 @@ describe("Bounties", () => {
         platformUserId: contributorUserId,
         platformUsername: "coder1",
         participant: contributor,
-        signer
+        notary
       });
 
       // when/then
@@ -374,7 +374,7 @@ describe("Bounties", () => {
     it("should claim expected amount with two resolvers", async () => {
       // given
       const contributorUserIds = ["contributor1", "contributor2"];
-      const { executeMaintainerClaim, identity, usdc, issuer, signer, bounties, platformId, repoId, issueId, contributorSigners } = await claimableLinkedBountyFixture(contributorUserIds);
+      const { executeMaintainerClaim, identity, usdc, issuer, notary, bounties, platformId, repoId, issueId, contributorSigners } = await claimableLinkedBountyFixture(contributorUserIds);
 
       // post bounty
       const amount = 500;
@@ -394,7 +394,7 @@ describe("Bounties", () => {
           platformUserId: contributorId,
           platformUsername: contributorId,
           participant: contributor,
-          signer
+          notary
         });
       }
 
@@ -409,7 +409,7 @@ describe("Bounties", () => {
     it("should claim expected amount with three resolvers", async () => {
       // given
       const contributorUserIds = ["contributor1", "contributor2", "contributor3"];
-      const { executeMaintainerClaim, identity, usdc, issuer, signer, bounties, platformId, repoId, issueId, contributorSigners } = await claimableLinkedBountyFixture(contributorUserIds);
+      const { executeMaintainerClaim, identity, usdc, issuer, notary, bounties, platformId, repoId, issueId, contributorSigners } = await claimableLinkedBountyFixture(contributorUserIds);
 
       // post bounty
       const amount = 500;
@@ -429,7 +429,7 @@ describe("Bounties", () => {
           platformUserId: contributorId,
           platformUsername: contributorId,
           participant: contributor,
-          signer
+          notary
         });
       }
 
@@ -444,7 +444,7 @@ describe("Bounties", () => {
     it("should claim expected amount with three resolvers that link and claim serially", async () => {
       // given
       const contributorUserIds = ["contributor1", "contributor2", "contributor3"];
-      const { executeMaintainerClaim, identity, usdc, issuer, signer, bounties, platformId, repoId, issueId, contributorSigners } = await claimableLinkedBountyFixture(contributorUserIds);
+      const { executeMaintainerClaim, identity, usdc, issuer, notary, bounties, platformId, repoId, issueId, contributorSigners } = await claimableLinkedBountyFixture(contributorUserIds);
 
       // post bounty
       const amount = 500;
@@ -464,7 +464,7 @@ describe("Bounties", () => {
           platformUserId: contributorId,
           platformUsername: contributorId,
           participant: contributor,
-          signer
+          notary
         });
 
         await bounties.connect(contributor).contributorClaim(platformId, repoId, issueId);
@@ -474,7 +474,7 @@ describe("Bounties", () => {
 
     it("should revert when non-resolver tries to claim bounty", async () => {
       // given
-      const { executeMaintainerClaim, identity, usdc, issuer, signer, bounties, platformId, repoId, issueId, contributor3 } = await claimableLinkedBountyFixture();
+      const { executeMaintainerClaim, identity, usdc, issuer, notary, bounties, platformId, repoId, issueId, contributor3 } = await claimableLinkedBountyFixture();
 
       // post bounty
       const amount = 500;
@@ -490,7 +490,7 @@ describe("Bounties", () => {
         platformUserId: "non-resolver",
         platformUsername: "non-resolver",
         participant: contributor3,
-        signer
+        notary
       });
 
       await expect(bounties.connect(contributor3).contributorClaim(platformId, repoId, issueId)).to.be.revertedWith("You are not a resolver");
@@ -499,7 +499,7 @@ describe("Bounties", () => {
 
     it("should revert when resolver tries to claim bounty again", async () => {
       // given
-      const { executeMaintainerClaim, identity, usdc, issuer, signer, bounties, platformId, repoId, issueId, contributor, contributorUserId } = await claimableLinkedBountyFixture();
+      const { executeMaintainerClaim, identity, usdc, issuer, notary, bounties, platformId, repoId, issueId, contributor, contributorUserId } = await claimableLinkedBountyFixture();
 
       // post bounty
       const amount = 500;
@@ -515,7 +515,7 @@ describe("Bounties", () => {
         platformUserId: contributorUserId,
         platformUsername: "coder1",
         participant: contributor,
-        signer
+        notary
       });
 
       // when
@@ -597,6 +597,20 @@ describe("Bounties", () => {
       expect(await bounties.owner()).to.be.eq(finance.address);
     });
 
+    it('should emit ConfigChange event', async () => {
+      const { bounties, identity, owner, notary, finance } = await bountiesFixture();
+
+      // when
+      expect(await bounties.connect(owner).ownerTransferOwnership(finance.address)).to.emit(bounties, "ConfigChange").withArgs(
+        await finance.getAddress(),
+        await notary.getAddress(),
+        await finance.getAddress(),
+        await identity.getAddress(),
+        await bounties.serviceFee(),
+        await bounties.maintainerFee()
+      );
+    });
+
     it('should not allow non-owner to transfer ownership', async () => {
       const { bounties, finance } = await bountiesFixture();
 
@@ -617,6 +631,20 @@ describe("Bounties", () => {
       // then
       expect(txn.hash).to.be.a.string;
       expect(await bounties.notary()).to.be.eq(finance.address);
+    });
+
+    it('should emit ConfigChange event', async () => {
+      const { bounties, identity, owner, finance } = await bountiesFixture();
+
+      // when
+      expect(await bounties.connect(owner).ownerUpdateNotary(finance.address)).to.emit(bounties, "ConfigChange").withArgs(
+        await owner.getAddress(),
+        await finance.getAddress(),
+        await finance.getAddress(),
+        await identity.getAddress(),
+        await bounties.serviceFee(),
+        await bounties.maintainerFee()
+      );
     });
 
     it('should not allow non-owner to update notary', async () => {
@@ -641,6 +669,20 @@ describe("Bounties", () => {
       expect(await bounties.finance()).to.be.eq(issuer.address);
     });
 
+    it('should emit ConfigChange event', async () => {
+      const { bounties, identity, owner, notary, issuer } = await bountiesFixture();
+
+      // when
+      expect(await bounties.connect(owner).ownerUpdateFinance(issuer.address)).to.emit(bounties, "ConfigChange").withArgs(
+        await owner.getAddress(),
+        await notary.getAddress(),
+        await issuer.getAddress(),
+        await identity.getAddress(),
+        await bounties.serviceFee(),
+        await bounties.maintainerFee()
+      );
+    });
+
     it('should not allow non-owner to update finance', async () => {
       const { bounties, finance, issuer } = await bountiesFixture();
 
@@ -663,6 +705,20 @@ describe("Bounties", () => {
       expect(await bounties.identityContract()).to.be.eq(issuer.address);
     });
 
+    it('should emit ConfigChange event', async () => {
+      const { bounties, finance, owner, notary, issuer } = await bountiesFixture();
+
+      // when
+      expect(await bounties.connect(owner).ownerUpdateIdentity(issuer.address)).to.emit(bounties, "ConfigChange").withArgs(
+        await owner.getAddress(),
+        await notary.getAddress(),
+        await finance.getAddress(),
+        await issuer.getAddress(),
+        await bounties.serviceFee(),
+        await bounties.maintainerFee()
+      );
+    });
+
     it('should not allow non-owner to update identity contract', async () => {
       const { bounties, finance, issuer } = await bountiesFixture();
 
@@ -683,6 +739,20 @@ describe("Bounties", () => {
       // then
       expect(txn.hash).to.be.a.string;
       expect(await bounties.serviceFee()).to.be.eq(50);
+    });
+
+    it('should emit ConfigChange event', async () => {
+      const { bounties, identity, finance, owner, notary } = await bountiesFixture();
+
+      // when
+      expect(await bounties.connect(owner).ownerUpdateServiceFee(50)).to.emit(bounties, "ConfigChange").withArgs(
+        await owner.getAddress(),
+        await notary.getAddress(),
+        await finance.getAddress(),
+        await identity.getAddress(),
+        50,
+        await bounties.maintainerFee()
+      );
     });
 
     it('should not allow non-owner to update service fee', async () => {
@@ -722,6 +792,20 @@ describe("Bounties", () => {
       // then
       expect(txn.hash).to.be.a.string;
       expect(await bounties.maintainerFee()).to.be.eq(50);
+    });
+
+    it('should emit ConfigChange event', async () => {
+      const { bounties, identity, finance, owner, notary } = await bountiesFixture();
+
+      // when
+      expect(await bounties.connect(owner).ownerUpdateServiceFee(50)).to.emit(bounties, "ConfigChange").withArgs(
+        await owner.getAddress(),
+        await notary.getAddress(),
+        await finance.getAddress(),
+        await identity.getAddress(),
+        await bounties.serviceFee(),
+        50
+      );
     });
 
     it('should not allow non-owner to update maintainer fee', async () => {
