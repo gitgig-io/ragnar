@@ -71,6 +71,13 @@ contract Bounties {
         uint256 amount
     );
 
+    event TokenSupportChange(
+        bool supported,
+        address token,
+        string symbol,
+        uint8 decimals
+    );
+
     // for updating the contract configuration
     address public owner;
 
@@ -423,35 +430,34 @@ contract Bounties {
         }
     }
 
+    // this takes a list of tokens to sweep to allow for granular sweeps
+    // as well as sweeping after a token is no longer supported
     function sweepBounty(
         string memory _platformId,
         string memory _repoId,
-        string memory _issueId
+        string memory _issueId,
+        address[] memory _tokens
     ) public financeOnly {
         bool swept = false;
-        for (uint256 index = 0; index < supportedTokens.length; index++) {
+        for (uint256 index = 0; index < _tokens.length; index++) {
+            address _token = _tokens[index];
             // get the amount of supported tokens in this bounty
-            uint256 amount = bounties[_platformId][_repoId][_issueId][
-                supportedTokens[index]
-            ];
+            uint256 amount = bounties[_platformId][_repoId][_issueId][_token];
 
             if (amount > 0) {
                 // transfer tokens to the message sender (finance)
-                IERC20(supportedTokens[index]).transfer(msg.sender, amount);
+                IERC20(_token).transfer(msg.sender, amount);
 
                 // remove the amount from the bounty
-                bounties[_platformId][_repoId][_issueId][
-                    supportedTokens[index]
-                ] -= amount;
-
+                bounties[_platformId][_repoId][_issueId][_token] -= amount;
                 emit BountySweep(
                     msg.sender,
                     _platformId,
                     _repoId,
                     _issueId,
-                    supportedTokens[index],
-                    ERC20(supportedTokens[index]).symbol(),
-                    ERC20(supportedTokens[index]).decimals(),
+                    _token,
+                    ERC20(_token).symbol(),
+                    ERC20(_token).decimals(),
                     amount
                 );
 
@@ -503,5 +509,38 @@ contract Bounties {
             "Invalid fee"
         );
         maintainerFee = _newMaintainerFee;
+    }
+
+    function ownerAddSupportedToken(address _newToken) public ownerOnly {
+        require(!isSupportedToken[_newToken], "Token already supported");
+
+        supportedTokens.push(_newToken);
+        isSupportedToken[_newToken] = true;
+
+        emit TokenSupportChange(
+            true,
+            _newToken,
+            ERC20(_newToken).symbol(),
+            ERC20(_newToken).decimals()
+        );
+    }
+
+    function ownerRemoveSupportedToken(address _removeToken) public ownerOnly {
+        require(isSupportedToken[_removeToken], "Token not supported");
+
+        for (uint256 i = 0; i < supportedTokens.length; i++) {
+            if (supportedTokens[i] == _removeToken) {
+                delete supportedTokens[i];
+            }
+        }
+
+        isSupportedToken[_removeToken] = false;
+
+        emit TokenSupportChange(
+            false,
+            _removeToken,
+            ERC20(_removeToken).symbol(),
+            ERC20(_removeToken).decimals()
+        );
     }
 }
