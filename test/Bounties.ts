@@ -66,6 +66,12 @@ describe("Bounties", () => {
     return fixtures;
   }
 
+  async function usdcFixture(issuer: HardhatEthersSigner) {
+    const TestUsdcFactory = await ethers.getContractFactory("TestUsdc");
+    const usdc = await TestUsdcFactory.deploy(1_000_000, issuer.address);
+    return usdc;
+  }
+
   interface PostBountyProps {
     amount: number;
     platformId: string;
@@ -747,6 +753,143 @@ describe("Bounties", () => {
     });
   });
 
+  describe("OwnerAddSupportedToken", () => {
+    it('should add a supported token', async () => {
+      const { bounties, owner, issuer } = await bountiesFixture();
+      const usdc2 = await usdcFixture(issuer);
+
+      // when
+      const txn = await bounties.connect(owner).ownerAddSupportedToken(await usdc2.getAddress());
+
+      // then
+      expect(txn.hash).to.be.a.string;
+    });
+
+    it('should update supported token array', async () => {
+      const { bounties, owner, issuer, usdc } = await bountiesFixture();
+      const usdc2 = await usdcFixture(issuer);
+      const usdc2Addr = await usdc2.getAddress();
+
+      // when
+      await bounties.connect(owner).ownerAddSupportedToken(usdc2Addr);
+
+      // then
+      expect(await bounties.supportedTokens(0)).to.be.eq(await usdc.getAddress());
+      expect(await bounties.supportedTokens(1)).to.be.eq(usdc2Addr);
+    });
+
+    it('should update supported token map', async () => {
+      const { bounties, owner, issuer, usdc } = await bountiesFixture();
+      const usdc2 = await usdcFixture(issuer);
+      const usdc2Addr = await usdc2.getAddress();
+
+      // when
+      await bounties.connect(owner).ownerAddSupportedToken(usdc2Addr);
+
+      // then
+      expect(await bounties.isSupportedToken(await usdc.getAddress())).to.be.true;
+      expect(await bounties.isSupportedToken(usdc2Addr)).to.be.true;
+    });
+
+    it('should emit TokenSupportChange event', async () => {
+      const { bounties, owner, issuer, usdc } = await bountiesFixture();
+      const usdc2 = await usdcFixture(issuer);
+      const usdc2Addr = await usdc2.getAddress();
+
+      // when/then
+      await expect(bounties.connect(owner).ownerAddSupportedToken(usdc2Addr)).to.emit(bounties, "TokenSupportChange").withArgs(
+        true,
+        usdc2Addr,
+        "USDC",
+        6
+      );
+    });
+
+    it('should revert when called by non-owner', async () => {
+      const { bounties, issuer } = await bountiesFixture();
+      const usdc2 = await usdcFixture(issuer);
+      const usdc2Addr = await usdc2.getAddress();
+
+      // when
+      await expect(bounties.connect(issuer).ownerAddSupportedToken(usdc2Addr)).to.be.revertedWith(
+        "You are not the owner"
+      );
+    });
+
+    it('should revert when called with already supported token', async () => {
+      const { bounties, owner, usdc } = await bountiesFixture();
+
+      // when
+      await expect(bounties.connect(owner).ownerAddSupportedToken(await usdc.getAddress())).to.be.revertedWith(
+        "Token already supported"
+      );
+    });
+  });
+
+  describe("OwnerRemoveSupportedToken", () => {
+    it('should remove a supported token', async () => {
+      const { bounties, owner, usdc } = await bountiesFixture();
+
+      // when
+      const txn = await bounties.connect(owner).ownerRemoveSupportedToken(await usdc.getAddress());
+
+      // then
+      expect(txn.hash).to.be.a.string;
+    });
+
+    it('should update supported token array', async () => {
+      const { bounties, owner, usdc } = await bountiesFixture();
+
+      // when
+      await bounties.connect(owner).ownerRemoveSupportedToken(await usdc.getAddress());
+
+      // then
+      expect(await bounties.supportedTokens(0)).to.be.eq(ethers.ZeroAddress);
+    });
+
+    it('should update supported token map', async () => {
+      const { bounties, owner, usdc } = await bountiesFixture();
+
+      // when
+      await bounties.connect(owner).ownerRemoveSupportedToken(await usdc.getAddress());
+
+      // then
+      expect(await bounties.isSupportedToken(await usdc.getAddress())).to.be.false;
+    });
+
+    it('should emit TokenSupportChange event', async () => {
+      const { bounties, owner, usdc } = await bountiesFixture();
+      const usdcAddr = await usdc.getAddress();
+
+      // when/then
+      await expect(bounties.connect(owner).ownerRemoveSupportedToken(usdcAddr)).to.emit(bounties, "TokenSupportChange").withArgs(
+        false,
+        usdcAddr,
+        "USDC",
+        6
+      );
+    });
+
+    it('should revert when called by non-owner', async () => {
+      const { bounties, issuer, usdc } = await bountiesFixture();
+
+      // when
+      await expect(bounties.connect(issuer).ownerRemoveSupportedToken(await usdc.getAddress())).to.be.revertedWith(
+        "You are not the owner"
+      );
+    });
+
+    it('should revert when called with non-supported token', async () => {
+      const { bounties, owner, issuer } = await bountiesFixture();
+      const usdc2 = await usdcFixture(issuer);
+
+      // when
+      await expect(bounties.connect(owner).ownerRemoveSupportedToken(await usdc2.getAddress())).to.be.revertedWith(
+        "Token not supported"
+      );
+    });
+  });
+
   describe("SweepBounty", () => {
     async function sweepableBountyFixture() {
       const fixtures = await bountiesFixture();
@@ -762,61 +905,62 @@ describe("Bounties", () => {
       await usdc.connect(issuer).approve(await bounties.getAddress(), amount);
       await bounties.connect(issuer).postBounty(platformId, repoId, issueId, await usdc.getAddress(), amount);
       expect(await bounties.bounties(platformId, repoId, issueId, await usdc.getAddress())).to.equal(bountyAmount);
+      const supportedTokens = [await usdc.getAddress()];
 
-      return { ...fixtures, amount, serviceFee, bountyAmount, platformId, repoId, issueId };
+      return { ...fixtures, amount, serviceFee, bountyAmount, platformId, repoId, issueId, supportedTokens };
     }
 
     it('should sweep a bounty', async () => {
-      const { bounties, finance, platformId, repoId, issueId } = await sweepableBountyFixture();
+      const { bounties, finance, platformId, repoId, issueId, supportedTokens } = await sweepableBountyFixture();
 
       // when
-      const txn = await bounties.connect(finance).sweepBounty(platformId, repoId, issueId);
+      const txn = await bounties.connect(finance).sweepBounty(platformId, repoId, issueId, supportedTokens);
 
       // then
       expect(txn.hash).to.be.a.string;
     });
 
     it('should zero out bounty', async () => {
-      const { bounties, finance, usdc, platformId, repoId, issueId } = await sweepableBountyFixture();
+      const { bounties, finance, usdc, platformId, repoId, issueId, supportedTokens } = await sweepableBountyFixture();
 
       // when
-      await bounties.connect(finance).sweepBounty(platformId, repoId, issueId);
+      await bounties.connect(finance).sweepBounty(platformId, repoId, issueId, supportedTokens);
 
       // then
       expect(await bounties.bounties(platformId, repoId, issueId, await usdc.getAddress())).to.equal(0);
     });
 
     it('should transfer bounty tokens to message sender', async () => {
-      const { bounties, finance, usdc, bountyAmount, platformId, repoId, issueId } = await sweepableBountyFixture();
+      const { bounties, finance, usdc, bountyAmount, platformId, repoId, issueId, supportedTokens } = await sweepableBountyFixture();
 
       // when
-      await bounties.connect(finance).sweepBounty(platformId, repoId, issueId);
+      await bounties.connect(finance).sweepBounty(platformId, repoId, issueId, supportedTokens);
 
       // then
       expect(await usdc.balanceOf(await finance.getAddress())).to.equal(bountyAmount);
     });
 
     it('should emit BountySweep event', async () => {
-      const { bounties, finance, usdc, bountyAmount, platformId, repoId, issueId } = await sweepableBountyFixture();
+      const { bounties, finance, usdc, bountyAmount, platformId, repoId, issueId, supportedTokens } = await sweepableBountyFixture();
 
       // when/then
-      expect(bounties.connect(finance).sweepBounty(platformId, repoId, issueId)).to.emit(bounties, "BountySweep").withArgs(finance.address, "1", "gitgig-io/ragnar", "123", await usdc.getAddress(), "USDC", 6, bountyAmount);
+      expect(bounties.connect(finance).sweepBounty(platformId, repoId, issueId, supportedTokens)).to.emit(bounties, "BountySweep").withArgs(finance.address, "1", "gitgig-io/ragnar", "123", await usdc.getAddress(), "USDC", 6, bountyAmount);
     });
 
 
     it('should revert if not called by finance', async () => {
-      const { bounties, issuer, platformId, repoId, issueId } = await sweepableBountyFixture();
+      const { bounties, issuer, platformId, repoId, issueId, supportedTokens } = await sweepableBountyFixture();
 
       // when/then
-      await expect(bounties.connect(issuer).sweepBounty(platformId, repoId, issueId)).to.be.revertedWith(
+      await expect(bounties.connect(issuer).sweepBounty(platformId, repoId, issueId, supportedTokens)).to.be.revertedWith(
         "You are not the finance team"
       );
     });
 
     it('should revert if no bounty to sweep', async () => {
-      const { bounties, finance } = await bountiesFixture();
+      const { bounties, finance, usdc } = await bountiesFixture();
 
-      await expect(bounties.connect(finance).sweepBounty("1", "gitgig-io/ragnar", "123")).to.be.revertedWith(
+      await expect(bounties.connect(finance).sweepBounty("1", "gitgig-io/ragnar", "123", [await usdc.getAddress()])).to.be.revertedWith(
         "No bounty to sweep"
       );
     });
