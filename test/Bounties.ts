@@ -3,10 +3,11 @@ import { ethers } from "hardhat";
 import { maintainerClaimSignature, mintSignature } from "./helpers/signatureHelpers";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { Bounties, Identity, TestUsdc } from "../typechain-types";
+import { PANIC_CODES } from "@nomicfoundation/hardhat-chai-matchers/panic";
 
 describe("Bounties", () => {
   async function bountiesFixture() {
-    const [_owner, finance, signer, issuer, maintainer, contributor, contributor2, contributor3] = await ethers.getSigners();
+    const [owner, finance, signer, issuer, maintainer, contributor, contributor2, contributor3] = await ethers.getSigners();
 
     const TestUsdcFactory = await ethers.getContractFactory("TestUsdc");
     const usdc = await TestUsdcFactory.deploy(1_000_000, issuer.address);
@@ -17,7 +18,7 @@ describe("Bounties", () => {
 
     const BountiesFactory = await ethers.getContractFactory("Bounties");
     const bounties = await BountiesFactory.deploy(finance.address, signer.address, await identity.getAddress(), [usdcAddr]);
-    return { bounties, identity, usdc, finance, signer, issuer, maintainer, contributor, contributor2, contributor3 };
+    return { owner, bounties, identity, usdc, finance, signer, issuer, maintainer, contributor, contributor2, contributor3 };
   }
 
   async function claimableBountyFixture(contributorIds?: string[]) {
@@ -576,6 +577,174 @@ describe("Bounties", () => {
     it('should not emit FeeWithdraw event when no fees', async () => {
       const { bounties, platformId, repoId, issueId, issuer, usdc, finance } = await claimableLinkedBountyFixture();
       await expect(bounties.connect(finance).withdrawFees()).to.not.emit(bounties, "FeeWithdraw");
+    });
+  });
+
+  describe("OwnerTransferOwnership", () => {
+    it('should transfer ownership', async () => {
+      const { bounties, owner, finance } = await bountiesFixture();
+
+      // when
+      const txn = await bounties.connect(owner).ownerTransferOwnership(finance.address);
+
+      // then
+      expect(txn.hash).to.be.a.string;
+      expect(await bounties.owner()).to.be.eq(finance.address);
+    });
+
+    it('should not allow non-owner to transfer ownership', async () => {
+      const { bounties, finance } = await bountiesFixture();
+
+      // when/then
+      await expect(bounties.connect(finance).ownerTransferOwnership(finance.address)).to.be.revertedWith(
+        "You are not the owner"
+      );
+    });
+  });
+
+  describe("OwnerUpdateNotary", () => {
+    it('should update notary', async () => {
+      const { bounties, owner, finance } = await bountiesFixture();
+
+      // when
+      const txn = await bounties.connect(owner).ownerUpdateNotary(finance.address);
+
+      // then
+      expect(txn.hash).to.be.a.string;
+      expect(await bounties.notary()).to.be.eq(finance.address);
+    });
+
+    it('should not allow non-owner to update notary', async () => {
+      const { bounties, finance } = await bountiesFixture();
+
+      // when/then
+      await expect(bounties.connect(finance).ownerUpdateNotary(finance.address)).to.be.revertedWith(
+        "You are not the owner"
+      );
+    });
+  });
+
+  describe("OwnerUpdateFinance", () => {
+    it('should update finance', async () => {
+      const { bounties, owner, issuer } = await bountiesFixture();
+
+      // when
+      const txn = await bounties.connect(owner).ownerUpdateFinance(issuer.address);
+
+      // then
+      expect(txn.hash).to.be.a.string;
+      expect(await bounties.finance()).to.be.eq(issuer.address);
+    });
+
+    it('should not allow non-owner to update finance', async () => {
+      const { bounties, finance, issuer } = await bountiesFixture();
+
+      // when/then
+      await expect(bounties.connect(finance).ownerUpdateFinance(issuer.address)).to.be.revertedWith(
+        "You are not the owner"
+      );
+    });
+  });
+
+  describe("OwnerUpdateIdentity", () => {
+    it('should update identity contract', async () => {
+      const { bounties, owner, issuer } = await bountiesFixture();
+
+      // when
+      const txn = await bounties.connect(owner).ownerUpdateIdentity(issuer.address);
+
+      // then
+      expect(txn.hash).to.be.a.string;
+      expect(await bounties.identityContract()).to.be.eq(issuer.address);
+    });
+
+    it('should not allow non-owner to update identity contract', async () => {
+      const { bounties, finance, issuer } = await bountiesFixture();
+
+      // when/then
+      await expect(bounties.connect(finance).ownerUpdateIdentity(issuer.address)).to.be.revertedWith(
+        "You are not the owner"
+      );
+    });
+  });
+
+  describe("OwnerUpdateServiceFee", () => {
+    it('should update service fee', async () => {
+      const { bounties, owner } = await bountiesFixture();
+
+      // when
+      const txn = await bounties.connect(owner).ownerUpdateServiceFee(50);
+
+      // then
+      expect(txn.hash).to.be.a.string;
+      expect(await bounties.serviceFee()).to.be.eq(50);
+    });
+
+    it('should not allow non-owner to update service fee', async () => {
+      const { bounties, finance } = await bountiesFixture();
+
+      // when/then
+      await expect(bounties.connect(finance).ownerUpdateServiceFee(50)).to.be.revertedWith(
+        "You are not the owner"
+      );
+    });
+
+    // TODO: figure out how to check for a TypeError
+    it.skip('should not allow service fee below zero', async () => {
+      const { bounties, owner } = await bountiesFixture();
+
+      // when/then
+      expect(() => bounties.connect(owner).ownerUpdateServiceFee(-1)).to.throw();
+    });
+
+    it('should not allow service fee over 100', async () => {
+      const { bounties, owner } = await bountiesFixture();
+
+      // when/then
+      await expect(bounties.connect(owner).ownerUpdateServiceFee(101)).to.be.revertedWith(
+        "Invalid fee"
+      );
+    });
+  });
+
+  describe("OwnerUpdateMaintainerFee", () => {
+    it('should update maintainer fee', async () => {
+      const { bounties, owner } = await bountiesFixture();
+
+      // when
+      const txn = await bounties.connect(owner).ownerUpdateMaintainerFee(50);
+
+      // then
+      expect(txn.hash).to.be.a.string;
+      expect(await bounties.maintainerFee()).to.be.eq(50);
+    });
+
+    it('should not allow non-owner to update maintainer fee', async () => {
+      const { bounties, finance } = await bountiesFixture();
+
+      // when/then
+      await expect(bounties.connect(finance).ownerUpdateMaintainerFee(50)).to.be.revertedWith(
+        "You are not the owner"
+      );
+    });
+
+    it('should not allow maintainer fee over 100', async () => {
+      const { bounties, owner } = await bountiesFixture();
+
+      // when/then
+      await expect(bounties.connect(owner).ownerUpdateMaintainerFee(101)).to.be.revertedWith(
+        "Invalid fee"
+      );
+    });
+
+    // TODO: figure out how to test for a TypeError INVALID_ARGUMENT
+    it.skip('should not allow maintainer fee below zero', async () => {
+      const { bounties, owner } = await bountiesFixture();
+
+      // when/then
+      await expect(bounties.connect(owner).ownerUpdateMaintainerFee(-1)).to.be.revertedWith(
+        "Invalid fee"
+      );
     });
   });
 
