@@ -1,18 +1,15 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
-import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
-import "@openzeppelin/contracts/utils/Pausable.sol";
-import "./IIdentity.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
+import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
+import {AccessControlDefaultAdminRules} from "@openzeppelin/contracts/access/extensions/AccessControlDefaultAdminRules.sol";
+import {IIdentity} from "./IIdentity.sol";
 
-// TODO: remove these
-// import "@openzeppelin/contracts/utils/Strings.sol";
-// import "hardhat/console.sol";
-
-contract Bounties is Pausable {
+contract Bounties is Pausable, AccessControlDefaultAdminRules {
     using ECDSA for bytes32;
     using MessageHashUtils for bytes32;
 
@@ -20,7 +17,6 @@ contract Bounties is Pausable {
     event BountyCreate(
         string platform,
         string repo,
-        // TODO: should this be a string?
         string issue,
         address issuer,
         address token,
@@ -80,22 +76,22 @@ contract Bounties is Pausable {
     );
 
     event ConfigChange(
-        address owner,
         address notary,
-        address finance,
         address identityContract,
         uint8 serviceFee,
         uint8 maintainerFee
     );
 
-    // for updating the contract configuration
-    address public owner;
+    // roles
+    bytes32 public constant CUSTODIAN_ADMIN_ROLE =
+        keccak256("CUSTODIAN_ADMIN_ROLE");
+    bytes32 public constant CUSTODIAN_ROLE = keccak256("CUSTODIAN_ROLE");
+    bytes32 public constant FINANCE_ADMIN_ROLE =
+        keccak256("FINANCE_ADMIN_ROLE");
+    bytes32 public constant FINANCE_ROLE = keccak256("FINANCE_ROLE");
 
     // for verifying signatures
     address public notary;
-
-    // for withdrawing fees
-    address public finance;
 
     // the identity contract
     address public identityContract;
@@ -125,15 +121,20 @@ contract Bounties is Pausable {
         public claimed;
 
     constructor(
+        address _custodian,
         address _finance,
         address _notary,
         address _identityContract,
         address[] memory _supportedTokens
-    ) Pausable() {
-        owner = msg.sender;
+    ) Pausable() AccessControlDefaultAdminRules(3 days, msg.sender) {
+        _grantRole(CUSTODIAN_ADMIN_ROLE, _custodian);
+        _grantRole(CUSTODIAN_ROLE, _custodian);
+        _grantRole(FINANCE_ADMIN_ROLE, _finance);
+        _grantRole(FINANCE_ROLE, _finance);
+        _setRoleAdmin(CUSTODIAN_ROLE, CUSTODIAN_ADMIN_ROLE);
+        _setRoleAdmin(FINANCE_ROLE, FINANCE_ADMIN_ROLE);
         notary = _notary;
         identityContract = _identityContract;
-        finance = _finance;
         supportedTokens = _supportedTokens;
         for (uint256 i = 0; i < _supportedTokens.length; i++) {
             isSupportedToken[_supportedTokens[i]] = true;
@@ -146,24 +147,7 @@ contract Bounties is Pausable {
             );
         }
 
-        emit ConfigChange(
-            owner,
-            notary,
-            finance,
-            identityContract,
-            serviceFee,
-            maintainerFee
-        );
-    }
-
-    modifier ownerOnly() {
-        require(msg.sender == owner, "You are not the owner");
-        _;
-    }
-
-    modifier financeOnly() {
-        require(finance == msg.sender, "You are not the finance team");
-        _;
+        emit ConfigChange(notary, identityContract, serviceFee, maintainerFee);
     }
 
     modifier supportedToken(address tokenContract) {
@@ -246,7 +230,7 @@ contract Bounties is Pausable {
         bounties[_platform][_repoId][_issueId][_tokenContract] += _bountyAmount;
 
         // transfer tokens from the msg sender to this contract and record the bounty amount
-        IERC20(_tokenContract).transferFrom(msg.sender, address(this), _amount);
+        ERC20(_tokenContract).transferFrom(msg.sender, address(this), _amount);
 
         emit BountyCreate(
             _platform,
@@ -266,8 +250,6 @@ contract Bounties is Pausable {
     // regardless of who sends the transaction because the maintainerAddress is part of the
     // signature
     function maintainerClaim(
-        // TODO: where is this maintainer address coming from??
-        // instead: pass in maintainer's github id, then lookup wallet from identity contract
         string memory _maintainerUserId,
         string memory _platformId,
         string memory _repoId,
@@ -337,7 +319,7 @@ contract Bounties is Pausable {
 
             if (amount > 0) {
                 // 3b. transfer tokens to the maintainer
-                IERC20(supportedTokens[index]).transfer(
+                ERC20(supportedTokens[index]).transfer(
                     _maintainerAddress,
                     amount
                 );
@@ -414,7 +396,7 @@ contract Bounties is Pausable {
 
             if (_resolverAmount > 0) {
                 // transfer tokens from this contract to the caller
-                IERC20(_tokenContract).transfer(msg.sender, _resolverAmount);
+                ERC20(_tokenContract).transfer(msg.sender, _resolverAmount);
 
                 // mark the bounty as claimed for this resolver
                 claimed[_platformId][_repoId][_issueId][_tokenContract][
@@ -441,13 +423,13 @@ contract Bounties is Pausable {
         }
     }
 
-    function withdrawFees() public financeOnly {
+    function withdrawFees() public onlyRole(FINANCE_ROLE) {
         for (uint256 i = 0; i < supportedTokens.length; i++) {
             address _recipient = msg.sender;
             uint256 _amount = fees[supportedTokens[i]];
 
             if (_amount > 0) {
-                IERC20(supportedTokens[i]).transfer(_recipient, _amount);
+                ERC20(supportedTokens[i]).transfer(_recipient, _amount);
                 fees[supportedTokens[i]] -= _amount;
 
                 emit FeeWithdraw(
@@ -468,7 +450,7 @@ contract Bounties is Pausable {
         string memory _repoId,
         string memory _issueId,
         address[] memory _tokens
-    ) public financeOnly {
+    ) public onlyRole(FINANCE_ROLE) {
         bool swept = false;
         for (uint256 index = 0; index < _tokens.length; index++) {
             address _token = _tokens[index];
@@ -477,7 +459,7 @@ contract Bounties is Pausable {
 
             if (amount > 0) {
                 // transfer tokens to the message sender (finance)
-                IERC20(_token).transfer(msg.sender, amount);
+                ERC20(_token).transfer(msg.sender, amount);
 
                 // remove the amount from the bounty
                 bounties[_platformId][_repoId][_issueId][_token] -= amount;
@@ -507,49 +489,33 @@ contract Bounties is Pausable {
     }
 
     function emitConfigChange() internal {
-        emit ConfigChange(
-            owner,
-            notary,
-            finance,
-            identityContract,
-            serviceFee,
-            maintainerFee
-        );
+        emit ConfigChange(notary, identityContract, serviceFee, maintainerFee);
     }
 
-    function ownerTransferOwnership(address _newOwner) public ownerOnly {
-        require(_newOwner != address(0), "Cannot transfer to zero address");
-        owner = _newOwner;
-        emitConfigChange();
-    }
-
-    function ownerUpdateNotary(address _newNotary) public ownerOnly {
+    function setNotary(address _newNotary) public onlyRole(CUSTODIAN_ROLE) {
         require(_newNotary != address(0), "Cannot update to zero address");
         notary = _newNotary;
         emitConfigChange();
     }
 
-    function ownerUpdateFinance(address _newFinance) public ownerOnly {
-        require(_newFinance != address(0), "Cannot update to zero address");
-        finance = _newFinance;
-        emitConfigChange();
-    }
-
-    function ownerUpdateIdentity(address _newIdentity) public ownerOnly {
+    function setIdentity(address _newIdentity) public onlyRole(CUSTODIAN_ROLE) {
         require(_newIdentity != address(0), "Cannot update to zero address");
         identityContract = _newIdentity;
         emitConfigChange();
     }
 
-    function ownerUpdateServiceFee(uint8 _newServiceFee) public ownerOnly {
+    function setServiceFee(uint8 _newServiceFee)
+        public
+        onlyRole(CUSTODIAN_ROLE)
+    {
         require(_newServiceFee >= 0 && _newServiceFee <= 100, "Invalid fee");
         serviceFee = _newServiceFee;
         emitConfigChange();
     }
 
-    function ownerUpdateMaintainerFee(uint8 _newMaintainerFee)
+    function setMaintainerFee(uint8 _newMaintainerFee)
         public
-        ownerOnly
+        onlyRole(CUSTODIAN_ROLE)
     {
         require(
             _newMaintainerFee >= 0 && _newMaintainerFee <= 100,
@@ -559,7 +525,7 @@ contract Bounties is Pausable {
         emitConfigChange();
     }
 
-    function ownerAddSupportedToken(address _newToken) public ownerOnly {
+    function addToken(address _newToken) public onlyRole(CUSTODIAN_ROLE) {
         require(!isSupportedToken[_newToken], "Token already supported");
 
         supportedTokens.push(_newToken);
@@ -573,7 +539,7 @@ contract Bounties is Pausable {
         );
     }
 
-    function ownerRemoveSupportedToken(address _removeToken) public ownerOnly {
+    function removeToken(address _removeToken) public onlyRole(CUSTODIAN_ROLE) {
         require(isSupportedToken[_removeToken], "Token not supported");
 
         for (uint256 i = 0; i < supportedTokens.length; i++) {
@@ -592,11 +558,11 @@ contract Bounties is Pausable {
         );
     }
 
-    function pause() public ownerOnly {
+    function pause() public onlyRole(CUSTODIAN_ROLE) {
         _pause();
     }
 
-    function unpause() public ownerOnly {
+    function unpause() public onlyRole(CUSTODIAN_ROLE) {
         _unpause();
     }
 }
