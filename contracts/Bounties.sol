@@ -5,13 +5,14 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
+import "@openzeppelin/contracts/utils/Pausable.sol";
 import "./IIdentity.sol";
 
 // TODO: remove these
 // import "@openzeppelin/contracts/utils/Strings.sol";
 // import "hardhat/console.sol";
 
-contract Bounties {
+contract Bounties is Pausable {
     using ECDSA for bytes32;
     using MessageHashUtils for bytes32;
 
@@ -128,7 +129,7 @@ contract Bounties {
         address _notary,
         address _identityContract,
         address[] memory _supportedTokens
-    ) {
+    ) Pausable() {
         owner = msg.sender;
         notary = _notary;
         identityContract = _identityContract;
@@ -232,6 +233,7 @@ contract Bounties {
         uint256 _amount
     )
         public
+        whenNotPaused
         issueNotClosed(_platform, _repoId, _issueId)
         supportedToken(_tokenContract)
     {
@@ -272,7 +274,7 @@ contract Bounties {
         string memory _issueId,
         string[] memory _resolverIds,
         bytes memory _signature
-    ) public issueNotClosed(_platformId, _repoId, _issueId) {
+    ) public whenNotPaused issueNotClosed(_platformId, _repoId, _issueId) {
         // lookup maintainer wallet from _maintainerUserId
         address _maintainerAddress = IIdentity(identityContract)
             .walletForPlatformUser(_platformId, _maintainerUserId);
@@ -376,7 +378,11 @@ contract Bounties {
         string memory _platformId,
         string memory _repoId,
         string memory _issueId
-    ) public unclaimedResolverOnly(_platformId, _repoId, _issueId) {
+    )
+        public
+        whenNotPaused
+        unclaimedResolverOnly(_platformId, _repoId, _issueId)
+    {
         for (uint256 i = 0; i < supportedTokens.length; i++) {
             uint8 _claimsRemaining = 0;
             address _tokenContract = supportedTokens[i];
@@ -584,5 +590,13 @@ contract Bounties {
             ERC20(_removeToken).symbol(),
             ERC20(_removeToken).decimals()
         );
+    }
+
+    function pause() public ownerOnly {
+        _pause();
+    }
+
+    function unpause() public ownerOnly {
+        _unpause();
     }
 }
