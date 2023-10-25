@@ -135,6 +135,17 @@ describe("Bounties", () => {
       expect(await usdc.balanceOf(await bounties.getAddress())).to.be.eq(amount);
     });
 
+    it("should revert when contract is paused", async () => {
+      const { bounties, issuer, usdc, owner } = await bountiesFixture();
+      const amount = 5;
+      await bounties.connect(owner).pause();
+
+      // when/then
+      await usdc.connect(issuer).approve(await bounties.getAddress(), amount);
+      await expect(bounties.connect(issuer).postBounty("1", "gitgig-io/ragnar", "123", await usdc.getAddress(), amount))
+        .to.be.revertedWithCustomError(bounties, 'EnforcedPause');
+    });
+
     it("should collect service fees", async () => {
       const { bounties, issuer, usdc } = await bountiesFixture();
       const amount = ethers.toBigInt(5);
@@ -203,6 +214,14 @@ describe("Bounties", () => {
       const { executeMaintainerClaim } = await claimableLinkedBountyFixture();
       const txn = await executeMaintainerClaim();
       expect(txn.hash).to.be.a.string;
+    });
+
+    it("should revert when contract is paused", async () => {
+      const { executeMaintainerClaim, bounties, owner } = await claimableLinkedBountyFixture();
+      await bounties.connect(owner).pause();
+
+      // when/then
+      await expect(executeMaintainerClaim()).to.be.revertedWithCustomError(bounties, 'EnforcedPause');
     });
 
     it("should transfer tokens to maintainer", async () => {
@@ -304,6 +323,35 @@ describe("Bounties", () => {
 
       // then
       expect(txn.hash).to.be.a.string;
+    });
+
+    it("should revert when paused", async () => {
+      // given
+      const { executeMaintainerClaim, owner, identity, usdc, issuer, notary, bounties, platformId, repoId, issueId, contributor, contributorUserId } = await claimableLinkedBountyFixture();
+
+      // post bounty
+      const amount = 500;
+      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, usdc });
+
+      // maintainer claim
+      await executeMaintainerClaim();
+
+      // contributor link wallet
+      await linkIdentity({
+        identity,
+        platformId,
+        platformUserId: contributorUserId,
+        platformUsername: "coder1",
+        participant: contributor,
+        notary
+      });
+
+      // pause contract
+      await bounties.connect(owner).pause();
+
+      // when
+      await expect(bounties.connect(contributor).contributorClaim(platformId, repoId, issueId))
+        .to.be.revertedWithCustomError(bounties, 'EnforcedPause');
     });
 
     it("should claim expected amount", async () => {
@@ -970,6 +1018,67 @@ describe("Bounties", () => {
       // when
       await expect(bounties.connect(owner).ownerRemoveSupportedToken(await usdc2.getAddress())).to.be.revertedWith(
         "Token not supported"
+      );
+    });
+  });
+
+  describe("Pause", () => {
+    it('should pause', async () => {
+      const { bounties, owner } = await bountiesFixture();
+
+      // when
+      await bounties.connect(owner).pause();
+
+      // then
+      expect(await bounties.paused()).to.be.true;
+    });
+
+    it('should emit Paused event', async () => {
+      const { bounties, owner } = await bountiesFixture();
+
+      // when
+      await expect(bounties.connect(owner).pause()).to.emit(bounties, "Paused").withArgs(owner.address);
+    });
+
+
+    it('should revert when called by non-owner', async () => {
+      const { bounties, finance } = await bountiesFixture();
+
+      // when
+      await expect(bounties.connect(finance).pause()).to.be.revertedWith(
+        "You are not the owner"
+      );
+    });
+  });
+
+  describe("Unpause", () => {
+    it('should unpause', async () => {
+      const { bounties, owner } = await bountiesFixture();
+      await bounties.connect(owner).pause();
+      expect(await bounties.paused()).to.be.true;
+
+      await bounties.connect(owner).unpause();
+
+      // then
+      expect(await bounties.paused()).to.be.false;
+    });
+
+    it('should emit Unpaused event', async () => {
+      const { bounties, owner } = await bountiesFixture();
+      await bounties.connect(owner).pause();
+      expect(await bounties.paused()).to.be.true;
+
+      await expect(bounties.connect(owner).unpause()).to.emit(bounties, "Unpaused").withArgs(owner.address);
+    });
+
+    it('should revert when called by non-owner', async () => {
+      const { bounties, owner, finance } = await bountiesFixture();
+      await bounties.connect(owner).pause();
+      expect(await bounties.paused()).to.be.true;
+
+      // when
+      await expect(bounties.connect(finance).unpause()).to.be.revertedWith(
+        "You are not the owner"
       );
     });
   });
