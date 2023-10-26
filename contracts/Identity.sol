@@ -1,23 +1,26 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
-import "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
-import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
-import "@openzeppelin/contracts/utils/Strings.sol";
-import "@openzeppelin/contracts/utils/Base64.sol";
-import "./IIdentity.sol";
-// TODO: remove
-import "hardhat/console.sol";
+import {ERC721, ERC721Enumerable} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
+import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
+import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
+import {Base64} from "@openzeppelin/contracts/utils/Base64.sol";
+import {AccessControlDefaultAdminRules} from "@openzeppelin/contracts/access/extensions/AccessControlDefaultAdminRules.sol";
+import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
+import {IIdentity} from "./IIdentity.sol";
 
 // TODO: should this be a proxy??
-contract Identity is IIdentity, ERC721Enumerable {
+contract Identity is
+    IIdentity,
+    ERC721Enumerable,
+    AccessControlDefaultAdminRules,
+    Pausable
+{
     using Strings for uint256;
     using ECDSA for bytes32;
     using MessageHashUtils for bytes32;
-
-    uint256 private nextTokenId;
 
     // TODO: should token id be a part of this?
     event IdentityUpdate(
@@ -27,12 +30,14 @@ contract Identity is IIdentity, ERC721Enumerable {
         string platformUsername
     );
 
-    string constant MSGPREFIX = "\x19Ethereum Signed Message:\n";
+    bytes32 public constant CUSTODIAN_ADMIN_ROLE =
+        keccak256("CUSTODIAN_ADMIN_ROLE");
+    bytes32 public constant CUSTODIAN_ROLE = keccak256("CUSTODIAN_ROLE");
 
-    bytes4 internal constant MAGICVALUE = 0x1626ba7e;
+    uint256 private nextTokenId;
 
     // TODO: function to update signing public key
-    address signer;
+    address notary;
 
     // TODO: store github usernames or ids? thinking user ids...
     // platformId -> tokenId -> userId
@@ -40,8 +45,27 @@ contract Identity is IIdentity, ERC721Enumerable {
 
     mapping(string => mapping(string => address)) public walletForPlatformUser;
 
-    constructor(address _signer) ERC721("GitGigIdentity", "GGID") {
-        signer = _signer;
+    constructor(address _custodian, address _notary)
+        ERC721("GitGigIdentity", "GGID")
+        AccessControlDefaultAdminRules(3 days, msg.sender)
+        Pausable()
+    {
+        notary = _notary;
+        _setRoleAdmin(CUSTODIAN_ROLE, CUSTODIAN_ADMIN_ROLE);
+        _grantRole(CUSTODIAN_ADMIN_ROLE, _custodian);
+        _grantRole(CUSTODIAN_ROLE, _custodian);
+    }
+
+    function supportsInterface(bytes4 interfaceId)
+        public
+        pure
+        override(ERC721Enumerable, AccessControlDefaultAdminRules)
+        returns (bool)
+    {
+        return
+            interfaceId == type(ERC721).interfaceId ||
+            interfaceId == type(ERC721Enumerable).interfaceId ||
+            interfaceId == type(AccessControlDefaultAdminRules).interfaceId;
     }
 
     function _validLinkSignature(
@@ -62,16 +86,13 @@ contract Identity is IIdentity, ERC721Enumerable {
 
         require(
             SignatureChecker.isValidSignatureNow(
-                signer,
+                notary,
                 _ethMessageHash,
                 _signature
             ),
             "Invalid signature"
         );
     }
-
-    // TODO: probably need a function for users to drop their wallet association
-    // if they lost the keys... or just a function to overwrite it.
 
     // TODO: switch this to EIP-712?? https://eips.ethereum.org/EIPS/eip-712#specification
     // TODO: do not allow a wallet to mint more than one NFT
@@ -83,7 +104,7 @@ contract Identity is IIdentity, ERC721Enumerable {
         string memory _platformUserId,
         string memory _platformUsername,
         bytes memory _signature
-    ) public {
+    ) public whenNotPaused {
         _validLinkSignature(
             _userAddress,
             _platformId,
@@ -117,7 +138,7 @@ contract Identity is IIdentity, ERC721Enumerable {
         string memory _platformUserId,
         string memory _platformUsername,
         bytes memory _signature
-    ) public {
+    ) public whenNotPaused {
         _validLinkSignature(
             _userAddress,
             _platformId,
@@ -172,58 +193,11 @@ contract Identity is IIdentity, ERC721Enumerable {
             );
     }
 
-    // TODO: remove these...
-    function toHex16(bytes16 data) internal pure returns (bytes32 result) {
-        result =
-            (bytes32(data) &
-                0xFFFFFFFFFFFFFFFF000000000000000000000000000000000000000000000000) |
-            ((bytes32(data) &
-                0x0000000000000000FFFFFFFFFFFFFFFF00000000000000000000000000000000) >>
-                64);
-        result =
-            (result &
-                0xFFFFFFFF000000000000000000000000FFFFFFFF000000000000000000000000) |
-            ((result &
-                0x00000000FFFFFFFF000000000000000000000000FFFFFFFF0000000000000000) >>
-                32);
-        result =
-            (result &
-                0xFFFF000000000000FFFF000000000000FFFF000000000000FFFF000000000000) |
-            ((result &
-                0x0000FFFF000000000000FFFF000000000000FFFF000000000000FFFF00000000) >>
-                16);
-        result =
-            (result &
-                0xFF000000FF000000FF000000FF000000FF000000FF000000FF000000FF000000) |
-            ((result &
-                0x00FF000000FF000000FF000000FF000000FF000000FF000000FF000000FF0000) >>
-                8);
-        result =
-            ((result &
-                0xF000F000F000F000F000F000F000F000F000F000F000F000F000F000F000F000) >>
-                4) |
-            ((result &
-                0x0F000F000F000F000F000F000F000F000F000F000F000F000F000F000F000F00) >>
-                8);
-        result = bytes32(
-            0x3030303030303030303030303030303030303030303030303030303030303030 +
-                uint256(result) +
-                (((uint256(result) +
-                    0x0606060606060606060606060606060606060606060606060606060606060606) >>
-                    4) &
-                    0x0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F) *
-                7
-        );
+    function pause() public onlyRole(CUSTODIAN_ROLE) {
+        _pause();
     }
 
-    function toHex(bytes32 data) public pure returns (string memory) {
-        return
-            string(
-                abi.encodePacked(
-                    "0x",
-                    toHex16(bytes16(data)),
-                    toHex16(bytes16(data << 128))
-                )
-            );
+    function unpause() public onlyRole(CUSTODIAN_ROLE) {
+        _unpause();
     }
 }

@@ -4,10 +4,10 @@ import { mintSignature } from "./helpers/signatureHelpers";
 
 describe("Identity", () => {
   async function identityFixture() {
-    const [owner, signer, user, user2] = await ethers.getSigners();
+    const [owner, custodian, notary, user, user2] = await ethers.getSigners();
     const IdentityFactory = await ethers.getContractFactory("Identity");
-    const identity = await IdentityFactory.deploy(signer.address);
-    return { identity, signer, owner, user, user2 };
+    const identity = await IdentityFactory.deploy(custodian.address, notary.address);
+    return { identity, custodian, notary, owner, user, user2 };
   }
 
   describe("Deployment", () => {
@@ -20,9 +20,9 @@ describe("Identity", () => {
   describe("Mint", () => {
     it("should be able to mint identity NFT", async () => {
       // given
-      const { identity, signer, user } = await identityFixture();
+      const { identity, notary, user } = await identityFixture();
       const params = [user.address, "1", "123", "coder1"];
-      const signature = await mintSignature(params, signer);
+      const signature = await mintSignature(params, notary);
 
       // when
       const txn = await identity.mint(params[0], params[1], params[2], params[3], signature);
@@ -31,11 +31,24 @@ describe("Identity", () => {
       expect(txn.hash).to.be.a.string;
     });
 
+    it("should revert when paused", async () => {
+      // given
+      const { identity, custodian, notary, user } = await identityFixture();
+      await identity.connect(custodian).pause();
+      expect(await identity.paused()).to.be.true;
+      const params = [user.address, "1", "123", "coder1"];
+      const signature = await mintSignature(params, notary);
+
+      // when/then
+      await expect(identity.mint(params[0], params[1], params[2], params[3], signature))
+        .to.be.revertedWithCustomError(identity, 'EnforcedPause');
+    });
+
     it("should emit an IdentityUpdate event", async () => {
       // given
-      const { identity, signer, user } = await identityFixture();
+      const { identity, notary, user } = await identityFixture();
       const params = [user.address, "1", "123", "coder1"];
-      const signature = await mintSignature(params, signer);
+      const signature = await mintSignature(params, notary);
 
       // when/then
       expect(await identity.mint(params[0], params[1], params[2], params[3], signature)).to.emit(identity, "IdentityUpdate").withArgs(params);
@@ -63,9 +76,9 @@ describe("Identity", () => {
 
     it("fails to mint a second nft for a user", async () => {
       // given
-      const { identity, signer, user } = await identityFixture();
+      const { identity, notary, user } = await identityFixture();
       const params = [user.address, "1", "123", "coder1"];
-      const signature = await mintSignature(params, signer);
+      const signature = await mintSignature(params, notary);
       await identity.mint(params[0], params[1], params[2], params[3], signature);
 
       // when
@@ -77,10 +90,10 @@ describe("Identity", () => {
     // TODO: add tests for nft attributes
 
     // it.only("fake test for printout out the wallet signed message", async () => {
-    //   const { signer, user } = await identityFixture();
+    //   const { notary, user } = await identityFixture();
 
     //   const params = [user.address, "1", "123456", "bob"];
-    //   const signature = await mintSignature(params, signer);
+    //   const signature = await mintSignature(params, notary);
     //   // const msg = ethers.toUtf8Bytes("GitGig Wallet Link: 123456")
     //   // const hash = ethers.keccak256(msg);
     //   // // without this conversion the number of bytes will be 64 instead of 32 which is wrong.
@@ -90,7 +103,7 @@ describe("Identity", () => {
     // });
 
     // it("fake test for printing out the user signed message signature", async () => {
-    //   const { signer, user } = await identityFixture();
+    //   const { notary, user } = await identityFixture();
     //   const msg = ethers.toUtf8Bytes("GitGig Wallet Link: 123456")
     //   const hash = ethers.keccak256(msg);
     //   console.log('hash: ', hash);
@@ -108,9 +121,9 @@ describe("Identity", () => {
   describe("Transfer", () => {
     async function signAndMintFixture() {
       const fixtures = await identityFixture();
-      const { identity, signer, user } = fixtures;
+      const { identity, notary, user } = fixtures;
       const params = [user.address, "1", "123", "coder1"];
-      const signature = await mintSignature(params, signer);
+      const signature = await mintSignature(params, notary);
       await identity.mint(params[0], params[1], params[2], params[3], signature);
       return { ...fixtures, params };
     }
@@ -118,9 +131,9 @@ describe("Identity", () => {
     // TODO: what if the target wallet already has an NFT?
 
     it("should be able to transfer identity NFT", async () => {
-      const { identity, signer, user2, params } = await signAndMintFixture();
+      const { identity, notary, user2, params } = await signAndMintFixture();
       params[0] = user2.address;
-      const signature = await mintSignature(params, signer);
+      const signature = await mintSignature(params, notary);
 
       // when
       const txn = await identity.transfer(params[0], params[1], params[2], params[3], signature);
@@ -129,10 +142,23 @@ describe("Identity", () => {
       expect(txn.hash).to.be.a.string;
     });
 
-    it("NFT should transfer to new wallet", async () => {
-      const { identity, signer, user, user2, params } = await signAndMintFixture();
+    it("should revert when paused", async () => {
+      // given
+      const { identity, custodian, notary, user2, params } = await signAndMintFixture();
+      await identity.connect(custodian).pause();
+      expect(await identity.paused()).to.be.true;
       params[0] = user2.address;
-      const signature = await mintSignature(params, signer);
+      const signature = await mintSignature(params, notary);
+
+      // when/then
+      await expect(identity.transfer(params[0], params[1], params[2], params[3], signature))
+        .to.be.revertedWithCustomError(identity, 'EnforcedPause');
+    });
+
+    it("NFT should transfer to new wallet", async () => {
+      const { identity, notary, user, user2, params } = await signAndMintFixture();
+      params[0] = user2.address;
+      const signature = await mintSignature(params, notary);
 
       // when
       await identity.transfer(params[0], params[1], params[2], params[3], signature);
@@ -144,18 +170,18 @@ describe("Identity", () => {
 
     it("should emit an IdentityUpdate event", async () => {
       // given
-      const { identity, signer, user2, params } = await signAndMintFixture();
+      const { identity, notary, user2, params } = await signAndMintFixture();
       params[0] = user2.address;
-      const signature = await mintSignature(params, signer);
+      const signature = await mintSignature(params, notary);
 
       // when/then
       expect(await identity.transfer(params[0], params[1], params[2], params[3], signature)).to.emit(identity, "IdentityUpdate").withArgs(params);
     });
 
     it("fails to transfer identity NFT with invalid signature", async () => {
-      const { identity, signer, user2, params } = await signAndMintFixture();
+      const { identity, notary, user2, params } = await signAndMintFixture();
       // generate sig with old user address
-      const signature = await mintSignature(params, signer);
+      const signature = await mintSignature(params, notary);
       params[0] = user2.address;
 
       await expect(identity.transfer(params[0], params[1], params[2], params[3], signature)).to.be.revertedWith(
@@ -164,14 +190,138 @@ describe("Identity", () => {
     });
 
     it("fails to transfer identity NFT when not yet minted", async () => {
-      const { identity, signer, user } = await identityFixture();
+      const { identity, notary, user } = await identityFixture();
       const params = [user.address, "1", "123", "coder1"];
-      const signature = await mintSignature(params, signer);
+      const signature = await mintSignature(params, notary);
 
       // when
       await expect(identity.transfer(params[0], params[1], params[2], params[3], signature)).to.be.revertedWith(
         "No identity to update"
       );
     });
-  })
+  });
+
+  describe("Pause", () => {
+    it('should pause', async () => {
+      const { identity, custodian } = await identityFixture();
+
+      // when
+      await identity.connect(custodian).pause();
+
+      // then
+      expect(await identity.paused()).to.be.true;
+    });
+
+    it('should emit Paused event', async () => {
+      const { identity, custodian } = await identityFixture();
+
+      // when
+      await expect(identity.connect(custodian).pause())
+        .to.emit(identity, "Paused")
+        .withArgs(custodian.address);
+    });
+
+
+    it('should revert when called by non-custodian', async () => {
+      const { identity, user } = await identityFixture();
+
+      // when
+      await expect(identity.connect(user).pause())
+        .to.be.revertedWithCustomError(identity, "AccessControlUnauthorizedAccount");
+    });
+  });
+
+  describe("Unpause", () => {
+    it('should unpause', async () => {
+      const { identity, custodian } = await identityFixture();
+      await identity.connect(custodian).pause();
+      expect(await identity.paused()).to.be.true;
+
+      await identity.connect(custodian).unpause();
+
+      // then
+      expect(await identity.paused()).to.be.false;
+    });
+
+    it('should emit Unpaused event', async () => {
+      const { identity, custodian } = await identityFixture();
+      await identity.connect(custodian).pause();
+      expect(await identity.paused()).to.be.true;
+
+      await expect(identity.connect(custodian).unpause())
+        .to.emit(identity, "Unpaused")
+        .withArgs(custodian.address);
+    });
+
+    it('should revert when called by non-custodian', async () => {
+      const { identity, custodian, user } = await identityFixture();
+      await identity.connect(custodian).pause();
+      expect(await identity.paused()).to.be.true;
+
+      // when
+      await expect(identity.connect(user).unpause())
+        .to.be.revertedWithCustomError(identity, "AccessControlUnauthorizedAccount");
+    });
+  });
+
+  describe("AccessControl:Custodian", () => {
+    it('should allow granting custodian role', async () => {
+      const { identity, custodian, user } = await identityFixture();
+
+      // when
+      await identity.connect(custodian).grantRole(await identity.CUSTODIAN_ROLE(), user.address);
+
+      // then
+      expect(await identity.hasRole(await identity.CUSTODIAN_ROLE(), await user.getAddress())).to.be.true;
+    });
+
+    it('should allow revoking custodian role', async () => {
+      const { identity, custodian, user } = await identityFixture();
+      await identity.connect(custodian).grantRole(await identity.CUSTODIAN_ROLE(), user.address);
+      expect(await identity.hasRole(await identity.CUSTODIAN_ROLE(), user.address)).to.be.true;
+
+      // when
+      await identity.connect(custodian).revokeRole(await identity.CUSTODIAN_ROLE(), user.address);
+
+      // then
+      expect(await identity.hasRole(await identity.CUSTODIAN_ROLE(), user.address)).to.be.false;
+    });
+
+    it('should emit RoleGranted event', async () => {
+      const { identity, custodian, user } = await identityFixture();
+
+      // when
+      await expect(identity.connect(custodian).grantRole(await identity.CUSTODIAN_ROLE(), user.address))
+        .to.emit(identity, "RoleGranted")
+        .withArgs(
+          await identity.CUSTODIAN_ROLE(),
+          await user.getAddress(),
+          await custodian.getAddress(),
+        );
+    });
+
+    it('should emit RoleRevoked event', async () => {
+      const { identity, custodian, user } = await identityFixture();
+      await identity.connect(custodian).grantRole(await identity.CUSTODIAN_ROLE(), user.address);
+      expect(await identity.hasRole(await identity.CUSTODIAN_ROLE(), user.address)).to.be.true;
+
+      // when
+      await expect(identity.connect(custodian).revokeRole(await identity.CUSTODIAN_ROLE(), user.address))
+        .to.emit(identity, "RoleRevoked")
+        .withArgs(
+          await identity.CUSTODIAN_ROLE(),
+          user.address,
+          custodian.address
+        );
+    });
+
+    it('should not allow non-custodian to grant custodian role', async () => {
+      const { identity, user } = await identityFixture();
+
+      // when/then
+      await expect(identity.connect(user).grantRole(await identity.CUSTODIAN_ROLE(), user.address))
+        .to.be.revertedWithCustomError(identity, "AccessControlUnauthorizedAccount");
+    });
+  });
+
 });
