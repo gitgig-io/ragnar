@@ -2,13 +2,13 @@ import { ethers } from "hardhat";
 import fs from "fs";
 
 async function main() {
-  const [owner, custodian, finance, signer, issuer] = await ethers.getSigners();
+  const [owner, custodian, finance, notary, issuer] = await ethers.getSigners();
 
   console.log('----- ACCOUNTS -----');
   console.log(`Owner: ${owner.address}`);
-  console.log(`Custodian: ${issuer.address}`);
+  console.log(`Custodian: ${custodian.address}`);
   console.log(`Finance: ${finance.address}`);
-  console.log(`Signer: ${signer.address}`);
+  console.log(`Notary: ${notary.address}`);
   console.log(`Issuer: ${issuer.address}`);
   console.log('--------------------');
 
@@ -16,14 +16,14 @@ async function main() {
   const usdcAddress = await usdc.getAddress();
   console.log(`Test USDC: ${usdcAddress}`);
 
-  const identity = await ethers.deployContract("Identity", [await signer.getAddress()]);
+  const identity = await ethers.deployContract("Identity", [custodian.address, notary.address]);
   const identityAddress = await identity.getAddress();
   console.log(`Identity: ${identityAddress}`);
 
   const bounties = await ethers.deployContract("Bounties", [
     custodian.address,
     finance.address,
-    signer.address,
+    notary.address,
     await identity.getAddress(),
     [await usdc.getAddress()]
   ]);
