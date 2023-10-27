@@ -702,7 +702,6 @@ describe("Bounties", () => {
     });
   });
 
-  // TODO: rename all of these
   describe("SetNotary", () => {
     it('should update notary', async () => {
       const { bounties, custodian, finance } = await bountiesFixture();

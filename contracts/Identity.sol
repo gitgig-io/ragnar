@@ -30,6 +30,8 @@ contract Identity is
         string platformUsername
     );
 
+    event ConfigChange(address notary);
+
     bytes32 public constant CUSTODIAN_ADMIN_ROLE =
         keccak256("CUSTODIAN_ADMIN_ROLE");
     bytes32 public constant CUSTODIAN_ROLE = keccak256("CUSTODIAN_ROLE");
@@ -37,7 +39,7 @@ contract Identity is
     uint256 private nextTokenId;
 
     // TODO: function to update signing public key
-    address notary;
+    address public notary;
 
     // TODO: store github usernames or ids? thinking user ids...
     // platformId -> tokenId -> userId
@@ -199,5 +201,11 @@ contract Identity is
 
     function unpause() public onlyRole(CUSTODIAN_ROLE) {
         _unpause();
+    }
+
+    function setNotary(address _newNotary) public onlyRole(CUSTODIAN_ROLE) {
+        require(_newNotary != address(0), "Invalid notary");
+        notary = _newNotary;
+        emit ConfigChange(notary);
     }
 }
