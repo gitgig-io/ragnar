@@ -265,6 +265,19 @@
   },
   {
     "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "notary",
+        "type": "address"
+      }
+    ],
+    "name": "ConfigChange",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
     "inputs": [],
     "name": "DefaultAdminDelayChangeCanceled",
     "type": "event"
@@ -801,6 +814,19 @@
   },
   {
     "inputs": [],
+    "name": "notary",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "owner",
     "outputs": [
       {
@@ -1019,6 +1045,19 @@
       }
     ],
     "name": "setApprovalForAll",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_newNotary",
+        "type": "address"
+      }
+    ],
+    "name": "setNotary",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

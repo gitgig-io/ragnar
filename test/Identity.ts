@@ -264,6 +264,45 @@ describe("Identity", () => {
     });
   });
 
+  describe("SetNotary", () => {
+    it('should update notary', async () => {
+      const { identity, custodian, user } = await identityFixture();
+
+      // when
+      const txn = await identity.connect(custodian).setNotary(user.address);
+
+      // then
+      expect(txn.hash).to.be.a.string;
+      expect(await identity.notary()).to.be.eq(user.address);
+    });
+
+    it('should emit ConfigChange event', async () => {
+      const { identity, custodian, user } = await identityFixture();
+
+      // when
+      expect(await identity.connect(custodian).setNotary(user.address))
+        .to.emit(identity, "ConfigChange")
+        .withArgs(user.address);
+    });
+
+    it('should not allow non-custodian to update notary', async () => {
+      const { identity, user } = await identityFixture();
+
+      // when/then
+      await expect(identity.connect(user).setNotary(user.address))
+        .to.be.revertedWithCustomError(identity, "AccessControlUnauthorizedAccount");
+    });
+
+    it('should revert when attempting to set to zero address', async () => {
+      const { identity, custodian } = await identityFixture();
+
+      // when/then
+      await expect(identity.connect(custodian).setNotary(ethers.ZeroAddress))
+        .to.be.revertedWith("Invalid notary");
+    });
+  });
+
+
   describe("AccessControl:Custodian", () => {
     it('should allow granting custodian role', async () => {
       const { identity, custodian, user } = await identityFixture();
