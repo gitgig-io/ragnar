@@ -2,6 +2,8 @@
 pragma solidity ^0.8.20;
 
 import {ERC721, ERC721Enumerable} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
+import {IERC721Metadata} from "@openzeppelin/contracts/token/ERC721/extensions/IERC721Metadata.sol";
+import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
@@ -11,9 +13,9 @@ import {AccessControlDefaultAdminRules} from "@openzeppelin/contracts/access/ext
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {IIdentity} from "./IIdentity.sol";
 
-// TODO: should this be a proxy??
 contract Identity is
     IIdentity,
+    IERC721Metadata,
     ERC721Enumerable,
     AccessControlDefaultAdminRules,
     Pausable
@@ -22,15 +24,15 @@ contract Identity is
     using ECDSA for bytes32;
     using MessageHashUtils for bytes32;
 
-    // TODO: should token id be a part of this?
     event IdentityUpdate(
+        uint256 tokenId,
         address wallet,
         string platform,
         string platformUserId,
         string platformUsername
     );
 
-    event ConfigChange(address notary);
+    event ConfigChange(address notary, string baseUri);
 
     bytes32 public constant CUSTODIAN_ADMIN_ROLE =
         keccak256("CUSTODIAN_ADMIN_ROLE");
@@ -38,8 +40,9 @@ contract Identity is
 
     uint256 private nextTokenId;
 
-    // TODO: function to update signing public key
     address public notary;
+
+    string public baseUri;
 
     // TODO: store github usernames or ids? thinking user ids...
     // platformId -> tokenId -> userId
@@ -47,12 +50,18 @@ contract Identity is
 
     mapping(string => mapping(string => address)) public walletForPlatformUser;
 
-    constructor(address _custodian, address _notary)
+    constructor(
+        address _custodian,
+        address _notary,
+        string memory _baseUri
+    )
         ERC721("GitGigIdentity", "GGID")
+        ERC721Enumerable()
         AccessControlDefaultAdminRules(3 days, msg.sender)
         Pausable()
     {
         notary = _notary;
+        baseUri = _baseUri;
         _setRoleAdmin(CUSTODIAN_ROLE, CUSTODIAN_ADMIN_ROLE);
         _grantRole(CUSTODIAN_ADMIN_ROLE, _custodian);
         _grantRole(CUSTODIAN_ROLE, _custodian);
@@ -61,10 +70,11 @@ contract Identity is
     function supportsInterface(bytes4 interfaceId)
         public
         pure
-        override(ERC721Enumerable, AccessControlDefaultAdminRules)
+        override(AccessControlDefaultAdminRules, ERC721Enumerable, IERC165)
         returns (bool)
     {
         return
+            interfaceId == type(IERC165).interfaceId ||
             interfaceId == type(ERC721).interfaceId ||
             interfaceId == type(ERC721Enumerable).interfaceId ||
             interfaceId == type(AccessControlDefaultAdminRules).interfaceId;
@@ -122,11 +132,11 @@ contract Identity is
         // TODO: should we allow off-chain metadata extensions via a uri?
         uint256 _tokenId = nextTokenId++;
         _safeMint(_userAddress, _tokenId);
-        // _setTokenURI(newItemId, getTokenURI(_platformId, newItemId));
 
         walletForPlatformUser[_platformId][_platformUserId] = _userAddress;
 
         emit IdentityUpdate(
+            _tokenId,
             _userAddress,
             _platformId,
             _platformUserId,
@@ -162,6 +172,7 @@ contract Identity is
         walletForPlatformUser[_platformId][_platformUserId] = _userAddress;
 
         emit IdentityUpdate(
+            _tokenId,
             _userAddress,
             _platformId,
             _platformUserId,
@@ -169,29 +180,21 @@ contract Identity is
         );
     }
 
-    function getTokenURI(string memory platformId, uint256 tokenId)
+    function tokenURI(uint256 tokenId)
         public
         view
+        override(ERC721, IERC721Metadata)
         returns (string memory)
     {
-        // TODO: support multiple platforms. should this be an array instead?
-        // TODO: better key name??
-        bytes memory dataURI = abi.encodePacked(
-            "{",
-            '"platform_',
-            platformId,
-            '_id": "',
-            platformUserIds[platformId][tokenId],
-            '"',
-            "}"
-        );
-
         return
-            string(
-                abi.encodePacked(
-                    "data:application/json;base64,",
-                    Base64.encode(dataURI)
-                )
+            string.concat(
+                baseUri,
+                "/api/chains/",
+                Strings.toString(block.chainid),
+                "/contracts/",
+                Strings.toHexString(address(this)),
+                "/tokens/",
+                Strings.toString(tokenId)
             );
     }
 
@@ -206,6 +209,14 @@ contract Identity is
     function setNotary(address _newNotary) public onlyRole(CUSTODIAN_ROLE) {
         require(_newNotary != address(0), "Invalid notary");
         notary = _newNotary;
-        emit ConfigChange(notary);
+        emit ConfigChange(notary, baseUri);
+    }
+
+    function setBaseUri(string memory _newBaseUri)
+        public
+        onlyRole(CUSTODIAN_ROLE)
+    {
+        baseUri = _newBaseUri;
+        emit ConfigChange(notary, baseUri);
     }
 }
