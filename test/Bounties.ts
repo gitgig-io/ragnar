@@ -13,7 +13,7 @@ describe("Bounties", () => {
     const usdcAddr = await usdc.getAddress();
 
     const IdentityFactory = await ethers.getContractFactory("Identity");
-    const identity = await IdentityFactory.deploy(custodian.address, notary.address);
+    const identity = await IdentityFactory.deploy(custodian.address, notary.address, "http://localhost:3000");
 
     const BountiesFactory = await ethers.getContractFactory("Bounties");
     const bounties = await BountiesFactory.deploy(

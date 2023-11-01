@@ -6,7 +6,7 @@ describe("Identity", () => {
   async function identityFixture() {
     const [owner, custodian, notary, user, user2] = await ethers.getSigners();
     const IdentityFactory = await ethers.getContractFactory("Identity");
-    const identity = await IdentityFactory.deploy(custodian.address, notary.address);
+    const identity = await IdentityFactory.deploy(custodian.address, notary.address, "http://localhost:4000");
     return { identity, custodian, notary, owner, user, user2 };
   }
 
@@ -51,7 +51,9 @@ describe("Identity", () => {
       const signature = await mintSignature(params, notary);
 
       // when/then
-      expect(await identity.mint(params[0], params[1], params[2], params[3], signature)).to.emit(identity, "IdentityUpdate").withArgs(params);
+      expect(await identity.mint(params[0], params[1], params[2], params[3], signature))
+        .to.emit(identity, "IdentityUpdate")
+        .withArgs([1, ...params]);
     });
 
     it("fails to mint identity NFT with invalid signature", async () => {
@@ -170,12 +172,15 @@ describe("Identity", () => {
 
     it("should emit an IdentityUpdate event", async () => {
       // given
-      const { identity, notary, user2, params } = await signAndMintFixture();
+      const { identity, notary, user, user2, params } = await signAndMintFixture();
       params[0] = user2.address;
+      const tokenId = await identity.tokenOfOwnerByIndex(user.address, 0);
       const signature = await mintSignature(params, notary);
 
       // when/then
-      expect(await identity.transfer(params[0], params[1], params[2], params[3], signature)).to.emit(identity, "IdentityUpdate").withArgs(params);
+      expect(await identity.transfer(params[0], params[1], params[2], params[3], signature))
+        .to.emit(identity, "IdentityUpdate")
+        .withArgs([tokenId, ...params]);
     });
 
     it("fails to transfer identity NFT with invalid signature", async () => {
@@ -302,6 +307,38 @@ describe("Identity", () => {
     });
   });
 
+  describe("SetBaseUri", () => {
+    it('should update base uri', async () => {
+      const { identity, custodian } = await identityFixture();
+
+      // when
+      const txn = await identity.connect(custodian)
+        .setBaseUri("http://localhost:9000");
+
+      // then
+      expect(txn.hash).to.be.a.string;
+      expect(await identity.baseUri()).to.be.eq("http://localhost:9000");
+    });
+
+    it('should emit ConfigChange event', async () => {
+      const { identity, custodian, notary } = await identityFixture();
+
+      // when
+      expect(await identity.connect(custodian)
+        .setBaseUri("http://localhost:9000"))
+        .to.emit(identity, "ConfigChange")
+        .withArgs(notary.address, "http://localhost:9000");
+    });
+
+    it('should not allow non-custodian to update notary', async () => {
+      const { identity, user } = await identityFixture();
+
+      // when/then
+      await expect(identity.connect(user)
+        .setBaseUri("http://localhost:9000"))
+        .to.be.revertedWithCustomError(identity, "AccessControlUnauthorizedAccount");
+    });
+  });
 
   describe("AccessControl:Custodian", () => {
     it('should allow granting custodian role', async () => {
@@ -363,4 +400,23 @@ describe("Identity", () => {
     });
   });
 
+  describe("TokenURI", () => {
+    it('should return token URI', async () => {
+      const { identity, user, notary } = await identityFixture();
+      const params = [user.address, "1", "123", "coder1"];
+      const signature = await mintSignature(params, notary);
+      const txn = await identity.mint(params[0], params[1], params[2], params[3], signature);
+      const tokenId = await identity.tokenOfOwnerByIndex(user, 0);
+      const identityAddr = (await identity.getAddress()).toLowerCase();
+
+      // when
+      const uri = await identity.tokenURI(tokenId);
+
+      // then
+      expect(uri).to.be.a.string;
+      expect(uri).to.equal(
+        `http://localhost:4000/api/chains/${txn.chainId}/contracts/${identityAddr}/tokens/${tokenId}`
+      );
+    });
+  });
 });
