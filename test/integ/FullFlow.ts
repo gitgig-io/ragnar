@@ -11,7 +11,7 @@ const { bounties: BOUNTIES_ADDR, usdc: USDC_ADDR, identity: IDENTITY_ADDR } = JS
 const { ISSUE_ID } = process.env;
 
 async function execute(issueId: string) {
-  const [_owner, finance, signer, issuer, maintainer, contributor] = await ethers.getSigners();
+  const [_owner, _custodian, finance, notary, issuer, maintainer, contributor] = await ethers.getSigners();
 
   const TestUsdcFactory = await ethers.getContractFactory("TestUsdc");
   const usdc = TestUsdcFactory.attach(USDC_ADDR);
@@ -50,35 +50,37 @@ async function execute(issueId: string) {
 
   await rl.question("Close the github issue and then press enter to continue");
 
-  await rl.question("Next step: maintainer claim. Press enter to continue");
-
   // maintainer link
   if (await identity.balanceOf(maintainer.address) > 0) {
     console.log('maintainer already linked');
   } else {
+    await rl.question("Next step: maintainer link identity. Press enter to continue");
     const mintParams = [maintainer.address, platformId, maintainerUserId, maintainerUsername];
-    const mintSig = await mintSignature(mintParams, signer);
+    const mintSig = await mintSignature(mintParams, notary);
     const { mint } = identity.connect(maintainer);
     await mint.apply(mint, [...mintParams, mintSig] as any);
   }
 
+  await rl.question("Next step: maintainer claim. Press enter to continue");
+
   // maintainer claim
   const claimParams = [maintainerUserId, platformId, repoId, issueId, [contributorUserId]];
-  const claimSignature = await maintainerClaimSignature(claimParams, signer);
+  const claimSignature = await maintainerClaimSignature(claimParams, notary);
   const { maintainerClaim } = bounties.connect(maintainer);
   await maintainerClaim.apply(maintainerClaim, [...claimParams, claimSignature]);
-
-  await rl.question("Next step: contributor claim. Press enter to continue");
 
   // contributor link
   if (await identity.balanceOf(contributor.address) > 0) {
     console.log('contributor already linked');
   } else {
+    await rl.question("Next step: contributor link identity. Press enter to continue");
     const mintParams = [contributor.address, platformId, contributorUserId, contributorUsername];
-    const mintSig = await mintSignature(mintParams, signer);
+    const mintSig = await mintSignature(mintParams, notary);
     const { mint } = identity.connect(contributor);
     await mint.apply(mint, [...mintParams, mintSig] as any);
   }
+
+  await rl.question("Next step: contributor claim. Press enter to continue");
 
   await bounties.connect(contributor).contributorClaim(platformId, repoId, issueId);
 

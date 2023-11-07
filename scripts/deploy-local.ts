@@ -16,7 +16,7 @@ async function main() {
   const usdcAddress = await usdc.getAddress();
   console.log(`Test USDC: ${usdcAddress}`);
 
-  const identity = await ethers.deployContract("Identity", [custodian.address, notary.address, "http://localhost:3000"]);
+  const identity = await ethers.deployContract("Identity", [custodian.address, notary.address, "http://localhost:4000"]);
   const identityAddress = await identity.getAddress();
   console.log(`Identity: ${identityAddress}`);
 

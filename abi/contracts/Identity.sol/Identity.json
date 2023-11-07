@@ -10,6 +10,11 @@
         "internalType": "address",
         "name": "_notary",
         "type": "address"
+      },
+      {
+        "internalType": "string",
+        "name": "_baseUri",
+        "type": "string"
       }
     ],
     "stateMutability": "nonpayable",
@@ -214,6 +219,22 @@
     "type": "error"
   },
   {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "value",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "length",
+        "type": "uint256"
+      }
+    ],
+    "name": "StringsInsufficientHexLength",
+    "type": "error"
+  },
+  {
     "anonymous": false,
     "inputs": [
       {
@@ -271,6 +292,12 @@
         "internalType": "address",
         "name": "notary",
         "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "baseUri",
+        "type": "string"
       }
     ],
     "name": "ConfigChange",
@@ -329,6 +356,12 @@
   {
     "anonymous": false,
     "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "tokenId",
+        "type": "uint256"
+      },
       {
         "indexed": false,
         "internalType": "address",
@@ -567,6 +600,19 @@
     "type": "function"
   },
   {
+    "inputs": [],
+    "name": "baseUri",
+    "outputs": [
+      {
+        "internalType": "string",
+        "name": "",
+        "type": "string"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "inputs": [
       {
         "internalType": "address",
@@ -671,30 +717,6 @@
         "internalType": "bytes32",
         "name": "",
         "type": "bytes32"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "string",
-        "name": "platformId",
-        "type": "string"
-      },
-      {
-        "internalType": "uint256",
-        "name": "tokenId",
-        "type": "uint256"
-      }
-    ],
-    "name": "getTokenURI",
-    "outputs": [
-      {
-        "internalType": "string",
-        "name": "",
-        "type": "string"
       }
     ],
     "stateMutability": "view",
@@ -1045,6 +1067,19 @@
       }
     ],
     "name": "setApprovalForAll",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "_newBaseUri",
+        "type": "string"
+      }
+    ],
+    "name": "setBaseUri",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
