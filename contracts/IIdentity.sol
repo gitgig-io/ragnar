@@ -2,8 +2,21 @@
 pragma solidity ^0.8.9;
 
 interface IIdentity {
-    function walletForPlatformUser(
+    function mint(
+        address userAddress,
         string memory platformId,
-        string memory userId
-    ) external view returns (address);
+        string memory platformUserId,
+        string memory platformUsername,
+        bytes memory signature
+    ) external;
+
+    function tokenIdForPlatformUser(
+        string memory platformId,
+        string memory platformUserId
+    ) external view returns (uint256);
+
+    function ownerOf(string memory platformId, string memory platformUserId)
+        external
+        view
+        returns (address);
 }

@@ -32,23 +32,30 @@ contract Identity is
         string platformUsername
     );
 
+    struct PlatformUser {
+        string platformId;
+        string userId;
+        string username;
+    }
+
     event ConfigChange(address notary, string baseUri);
 
     bytes32 public constant CUSTODIAN_ADMIN_ROLE =
         keccak256("CUSTODIAN_ADMIN_ROLE");
     bytes32 public constant CUSTODIAN_ROLE = keccak256("CUSTODIAN_ROLE");
 
-    uint256 private nextTokenId;
+    // start at 1 so we can tell the difference between a minted and non-minted
+    // token for a user in the tokenIdForPlatformUser mapping
+    uint256 private nextTokenId = 1;
 
     address public notary;
 
     string public baseUri;
 
-    // TODO: store github usernames or ids? thinking user ids...
-    // platformId -> tokenId -> userId
-    mapping(string => mapping(uint256 => string)) public platformUserIds;
+    mapping(string platformId => mapping(string platformUserId => uint256 tokenId)) public tokenIdForPlatformUser;
 
-    mapping(string => mapping(string => address)) public walletForPlatformUser;
+    // TODO: do we need this?
+    mapping(uint256 tokenId => PlatformUser platformUser) public platformUserForTokenId;
 
     constructor(
         address _custodian,
@@ -106,8 +113,7 @@ contract Identity is
         );
     }
 
-    // TODO: switch this to EIP-712?? https://eips.ethereum.org/EIPS/eip-712#specification
-    // TODO: do not allow a wallet to mint more than one NFT
+    // TODO: switch this to EIP-712 https://eips.ethereum.org/EIPS/eip-712#specification
     // TODO: disallow transfers
 
     function mint(
@@ -124,16 +130,20 @@ contract Identity is
             _platformUsername,
             _signature
         );
-        require(balanceOf(_userAddress) < 1, "Already minted");
+        // ensure token has not already been minted for this platform user
+        require(tokenIdForPlatformUser[_platformId][_platformUserId] == 0, "Already minted");
 
-        // TODO: ensure the platformUserId does not already have an existing wallet
-
-        // TODO: extract data and set appropriate nft attributes
-        // TODO: should we allow off-chain metadata extensions via a uri?
         uint256 _tokenId = nextTokenId++;
-        _safeMint(_userAddress, _tokenId);
 
-        walletForPlatformUser[_platformId][_platformUserId] = _userAddress;
+        // update the internal state before calling safeMint to avoid inconsistent state
+        tokenIdForPlatformUser[_platformId][_platformUserId] = _tokenId;
+        platformUserForTokenId[_tokenId] = PlatformUser(
+            _platformId,
+            _platformUserId,
+            _platformUsername
+        );
+
+        _safeMint(_userAddress, _tokenId);
 
         emit IdentityUpdate(
             _tokenId,
@@ -158,18 +168,17 @@ contract Identity is
             _platformUsername,
             _signature
         );
-        address priorAddress = walletForPlatformUser[_platformId][
-            _platformUserId
-        ];
 
-        require(priorAddress != address(0), "No identity to update");
+        uint256 _tokenId = tokenIdForPlatformUser[_platformId][_platformUserId];
+
+        // make sure the identity token has been minted for the given platform user
+        require(_tokenId != 0, "Not minted");
+
+        // update the username as this could change off-chain
+        platformUserForTokenId[_tokenId].username = _platformUsername;
 
         // transfer the token to the new wallet
-        uint256 _tokenId = tokenOfOwnerByIndex(priorAddress, 0);
         _update(_userAddress, _tokenId, address(0));
-
-        // update the address of the platform user
-        walletForPlatformUser[_platformId][_platformUserId] = _userAddress;
 
         emit IdentityUpdate(
             _tokenId,
@@ -178,6 +187,18 @@ contract Identity is
             _platformUserId,
             _platformUsername
         );
+    }
+
+    function ownerOf(string memory _platformId, string memory _platformUserId) override public view returns (address) {
+      uint256 _tokenId = tokenIdForPlatformUser[_platformId][_platformUserId];
+
+      // TODO: is this right? or should we let ownerOf(tokenId) throw custom error?
+      if (_tokenId == 0) {
+        // not minted yet, so return 0 address
+        return address(0);
+      }
+
+      return ownerOf(_tokenId);
     }
 
     function tokenURI(uint256 tokenId)
