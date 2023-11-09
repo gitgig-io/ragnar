@@ -100,9 +100,8 @@ describe("Identity", () => {
       const params = [user.address, "1", "123", "coder1"];
       const signature = ethers.toUtf8Bytes("abc123");
 
-      await expect(identity.mint(params[0], params[1], params[2], params[3], signature)).to.be.revertedWith(
-        "Invalid signature"
-      );
+      await expect(identity.mint(params[0], params[1], params[2], params[3], signature))
+        .to.be.revertedWithCustomError(identity, "InvalidSignature");
     });
 
     it("fails to mint identity NFT with signature from wrong account", async () => {
@@ -110,9 +109,8 @@ describe("Identity", () => {
       const params = [user.address, "1", "123", "coder1"];
       const signature = await mintSignature(params, owner);
 
-      await expect(identity.mint(params[0], params[1], params[2], params[3], signature)).to.be.revertedWith(
-        "Invalid signature"
-      );
+      await expect(identity.mint(params[0], params[1], params[2], params[3], signature))
+        .to.be.revertedWithCustomError(identity, "InvalidSignature");
     });
 
     it("fails to mint a second nft for a user", async () => {
@@ -123,9 +121,8 @@ describe("Identity", () => {
       await identity.mint(params[0], params[1], params[2], params[3], signature);
 
       // when
-      await expect(identity.mint(params[0], params[1], params[2], params[3], signature)).to.be.revertedWith(
-        "Already minted"
-      );
+      await expect(identity.mint(params[0], params[1], params[2], params[3], signature))
+        .to.be.revertedWithCustomError(identity, "AlreadyMinted");
     });
 
     // TODO: add tests for nft attributes
@@ -236,9 +233,8 @@ describe("Identity", () => {
       const signature = await mintSignature(params, notary);
       params[0] = user2.address;
 
-      await expect(identity.transfer(params[0], params[1], params[2], params[3], signature)).to.be.revertedWith(
-        "Invalid signature"
-      );
+      await expect(identity.transfer(params[0], params[1], params[2], params[3], signature))
+        .to.be.revertedWithCustomError(identity, "InvalidSignature");
     });
 
     it("fails to transfer identity NFT when not yet minted", async () => {
@@ -247,9 +243,8 @@ describe("Identity", () => {
       const signature = await mintSignature(params, notary);
 
       // when
-      await expect(identity.transfer(params[0], params[1], params[2], params[3], signature)).to.be.revertedWith(
-        "Not minted"
-      );
+      await expect(identity.transfer(params[0], params[1], params[2], params[3], signature))
+        .to.be.revertedWithCustomError(identity, "ERC721NonexistentToken");
     });
   });
 
@@ -350,7 +345,7 @@ describe("Identity", () => {
 
       // when/then
       await expect(identity.connect(custodian).setNotary(ethers.ZeroAddress))
-        .to.be.revertedWith("Invalid notary");
+        .to.be.revertedWithCustomError(identity, "InvalidAccount");
     });
   });
 
@@ -467,7 +462,7 @@ describe("Identity", () => {
     });
   });
 
-  describe("OwnerOf", () => {
+  describe("OwnerOf/2", () => {
     it('should return zero address for non-existent token', async () => {
       const { identity } = await identityFixture();
       // this works, but ts compiler is not happy.
@@ -479,6 +474,72 @@ describe("Identity", () => {
       const { identity, user, params } = await signAndMintFixture();
       expect(await identity.ownerOf(ethers.Typed.string(params[1]), ethers.Typed.string(params[2])))
         .to.equal(user.address);
+    });
+  });
+
+  describe("Approve", () => {
+    it('should revert', async () => {
+      const { identity, user, user2, params } = await signAndMintFixture();
+      const tokenId = await identity.tokenIdForPlatformUser(params[1], params[2]);
+      expect(tokenId).to.be.greaterThan(0);
+
+      // when/then
+      await expect(identity.connect(user).approve(user2.address, tokenId))
+        .to.be.revertedWithCustomError(identity, "NotSupported");
+    });
+  });
+
+  describe("SetApprovalForAll", () => {
+    it('should revert', async () => {
+      const { identity, user, user2, params } = await signAndMintFixture();
+      const tokenId = await identity.tokenIdForPlatformUser(params[1], params[2]);
+      expect(tokenId).to.be.greaterThan(0);
+
+      // when/then
+      await expect(identity.connect(user).setApprovalForAll(user2.address, true))
+        .to.be.revertedWithCustomError(identity, "NotSupported");
+    });
+  });
+
+  describe("TransferFrom", () => {
+    it('should revert', async () => {
+      const { identity, user, user2, params } = await signAndMintFixture();
+      const tokenId = await identity.tokenIdForPlatformUser(params[1], params[2]);
+      expect(tokenId).to.be.greaterThan(0);
+
+      // when/then
+      await expect(identity.connect(user).transferFrom(user.address, user2.address, tokenId))
+        .to.be.revertedWithCustomError(identity, "NotSupported");
+    });
+  });
+
+  describe("SafeTransferFrom/3", () => {
+    it('should revert', async () => {
+      const { identity, user, user2, params } = await signAndMintFixture();
+      const tokenId = await identity.tokenIdForPlatformUser(params[1], params[2]);
+      expect(tokenId).to.be.greaterThan(0);
+
+      // when/then
+      await expect(identity.connect(user).safeTransferFrom(user.address, user2.address, tokenId))
+        .to.be.revertedWithCustomError(identity, "NotSupported");
+    });
+  });
+
+  describe("SafeTransferFrom/4", () => {
+    it('should revert', async () => {
+      const { identity, user, user2, params } = await signAndMintFixture();
+      const tokenId = await identity.tokenIdForPlatformUser(params[1], params[2]);
+      expect(tokenId).to.be.greaterThan(0);
+      const bytes = ethers.toUtf8Bytes("");
+
+      // when/then
+      await expect(
+        identity.connect(user).safeTransferFrom(
+          ethers.Typed.address(user.address),
+          ethers.Typed.address(user2.address),
+          ethers.Typed.uint256(tokenId),
+          ethers.Typed.bytes(bytes))
+      ).to.be.revertedWithCustomError(identity, "NotSupported");
     });
   });
 });
