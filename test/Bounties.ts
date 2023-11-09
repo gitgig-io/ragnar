@@ -247,6 +247,47 @@ describe("Bounties", () => {
       expect(await usdc.balanceOf(await maintainer.getAddress())).to.be.eq(expectedAmount);
     });
 
+    it("should transfer tokens to contributors that have minted identity", async () => {
+      // given
+      const contributorUserIds = ["contributor1", "contributor2", "contributor3"];
+      const autoClaimContributorUserIds = contributorUserIds.slice(1);
+      const { executeMaintainerClaim, identity, usdc, issuer, notary, bounties, platformId, repoId, issueId, contributorSigners } = await claimableLinkedBountyFixture(contributorUserIds);
+
+      // post bounty
+      const amount = 500;
+      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, usdc });
+      const contributorAmount = await bountyAmountAfterFeesPerContributor(bounties, amount, contributorUserIds.length);
+
+      // contributors link wallet
+      for (let i = 0; i < contributorUserIds.length; i++) {
+        const contributorId = contributorUserIds[i];
+
+        if (autoClaimContributorUserIds.includes(contributorId)) {
+          const contributor = contributorSigners[i];
+          await linkIdentity({
+            identity,
+            platformId,
+            platformUserId: contributorId,
+            platformUsername: contributorId,
+            participant: contributor,
+            notary
+          });
+        }
+      }
+
+      // maintainer claim
+      await executeMaintainerClaim();
+
+      // when/then
+      for (let i = 0; i < contributorUserIds.length; i++) {
+        const contributorUserId = contributorUserIds[i];
+        const expectedAmount = autoClaimContributorUserIds.includes(contributorUserId) ? contributorAmount : 0;
+        const contributor = contributorSigners[i];
+        expect(await usdc.balanceOf(contributor.address)).to.be.eq(expectedAmount);
+      }
+    });
+
+
     it("should emit BountyClaim event", async () => {
       const { bounties, maintainer, issuer, platformId, repoId, issueId, usdc, executeMaintainerClaim } = await claimableLinkedBountyFixture();
 
@@ -330,6 +371,34 @@ describe("Bounties", () => {
 
       // then
       expect(txn.hash).to.be.a.string;
+    });
+
+    it("should revert for resolver with same user id on different platform", async () => {
+      // given
+      const { executeMaintainerClaim, identity, usdc, issuer, notary, bounties, platformId, repoId, issueId, contributor, contributorUserId } = await claimableLinkedBountyFixture();
+      const otherPlatformId = '2';
+      expect(otherPlatformId).to.not.equal(platformId);
+
+      // post bounty
+      const amount = 500;
+      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, usdc });
+
+      // maintainer claim
+      await executeMaintainerClaim();
+
+      // contributor link wallet
+      await linkIdentity({
+        identity,
+        platformId: otherPlatformId,
+        platformUserId: contributorUserId,
+        platformUsername: "coder1",
+        participant: contributor,
+        notary
+      });
+
+      // when/then
+      await expect(bounties.connect(contributor).contributorClaim(platformId, repoId, issueId))
+        .to.be.revertedWith("You are not a resolver");
     });
 
     it("should revert when paused", async () => {

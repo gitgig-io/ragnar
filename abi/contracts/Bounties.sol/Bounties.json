@@ -742,28 +742,28 @@
     "inputs": [
       {
         "internalType": "string",
-        "name": "",
+        "name": "platformId",
         "type": "string"
       },
       {
         "internalType": "string",
-        "name": "",
+        "name": "repoId",
         "type": "string"
       },
       {
         "internalType": "string",
-        "name": "",
+        "name": "issueId",
         "type": "string"
       },
       {
         "internalType": "address",
-        "name": "",
+        "name": "tokenContract",
         "type": "address"
       },
       {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
+        "internalType": "string",
+        "name": "platformUserId",
+        "type": "string"
       }
     ],
     "name": "claimed",

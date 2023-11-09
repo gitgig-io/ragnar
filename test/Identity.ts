@@ -75,7 +75,7 @@ describe("Identity", () => {
       await identity.mint(params[0], params[1], params[2], params[3], signature);
 
       // then
-      const result = await identity.platformUserForTokenId(1);
+      const result = await identity.platformUser(1);
       expect(result.platformId).to.equal(params[1]);
       expect(result.userId).to.equal(params[2]);
       expect(result.username).to.equal(params[3]);
@@ -182,7 +182,7 @@ describe("Identity", () => {
       await identity.transfer(params[0], params[1], params[2], params[3], signature);
 
       // then
-      const result = await identity.platformUserForTokenId(1);
+      const result = await identity.platformUser(1);
       expect(result.platformId).to.equal(params[1]);
       expect(result.userId).to.equal(params[2]);
       expect(result.username).to.equal(params[3]);

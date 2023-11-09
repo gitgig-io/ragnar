@@ -11,7 +11,7 @@ import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {Base64} from "@openzeppelin/contracts/utils/Base64.sol";
 import {AccessControlDefaultAdminRules} from "@openzeppelin/contracts/access/extensions/AccessControlDefaultAdminRules.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
-import {IIdentity} from "./IIdentity.sol";
+import {IIdentity, PlatformUser} from "./IIdentity.sol";
 
 contract Identity is
     IIdentity,
@@ -39,12 +39,6 @@ contract Identity is
     error InvalidSignature();
     error NotSupported();
 
-    struct PlatformUser {
-        string platformId;
-        string userId;
-        string username;
-    }
-
     bytes32 public constant CUSTODIAN_ADMIN_ROLE =
         keccak256("CUSTODIAN_ADMIN_ROLE");
     bytes32 public constant CUSTODIAN_ROLE = keccak256("CUSTODIAN_ROLE");
@@ -60,7 +54,7 @@ contract Identity is
     mapping(string platformId => mapping(string platformUserId => uint256 tokenId)) public tokenIdForPlatformUser;
 
     // TODO: do we need this?
-    mapping(uint256 tokenId => PlatformUser platformUser) public platformUserForTokenId;
+    mapping(uint256 tokenId => PlatformUser platformUser) private platformUserForTokenId;
 
     constructor(
         address _custodian,
@@ -265,4 +259,16 @@ contract Identity is
     }
 
     /** END NFT transfer overrides **/
+
+    function tokenOfOwnerByIndex(address addr, uint256 index) override(ERC721Enumerable,IIdentity) public view returns (uint256) {
+      return super.tokenOfOwnerByIndex(addr, index);
+    }
+
+    function balanceOf(address addr) override(ERC721,IERC721, IIdentity) public view returns (uint256) {
+      return super.balanceOf(addr);
+    }
+
+    function platformUser(uint256 tokenId) override(IIdentity) public view returns (PlatformUser memory) {
+      return platformUserForTokenId[tokenId];
+    }
 }

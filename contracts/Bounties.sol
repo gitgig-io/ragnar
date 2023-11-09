@@ -7,7 +7,7 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {AccessControlDefaultAdminRules} from "@openzeppelin/contracts/access/extensions/AccessControlDefaultAdminRules.sol";
-import {IIdentity} from "./IIdentity.sol";
+import {IIdentity, PlatformUser} from "./IIdentity.sol";
 
 contract Bounties is Pausable, AccessControlDefaultAdminRules {
     using ECDSA for bytes32;
@@ -117,7 +117,7 @@ contract Bounties is Pausable, AccessControlDefaultAdminRules {
     mapping(string => mapping(string => mapping(string => mapping(address => uint256))))
         public bounties;
 
-    mapping(string => mapping(string => mapping(string => mapping(address => mapping(address => bool)))))
+    mapping(string platformId => mapping(string repoId => mapping(string issueId => mapping(address tokenContract => mapping(string platformUserId => bool)))))
         public claimed;
 
     constructor(
@@ -172,41 +172,62 @@ contract Bounties is Pausable, AccessControlDefaultAdminRules {
         string memory _repoId,
         string memory _issueId
     ) {
-        // first ensure they have not claimed yet
-        for (uint256 i = 0; i < supportedTokens.length; i++) {
-            require(
-                claimed[_platformId][_repoId][_issueId][supportedTokens[i]][
-                    msg.sender
-                ] == false,
-                "You have already claimed bounty"
-            );
-        }
+        uint256 _identitiesLength = IIdentity(identityContract).balanceOf(msg.sender);
 
-        // next ensure they are actually a resolver for this issue
-        bool isResolver = false;
+        bool _hasUnclaimed = false;
+        bool _isResolver = false;
 
-        for (
-            uint256 i = 0;
-            i < resolvers[_platformId][_repoId][_issueId].length;
-            i++
-        ) {
-            string memory _resolverUserId = resolvers[_platformId][_repoId][
-                _issueId
-            ][i];
+        // need to check all of their identities
+        for (uint256 i = 0; i < _identitiesLength; i++) {
+            // lookup the platformUserId for the resolver
+            uint256 _tokenId = IIdentity(identityContract).tokenOfOwnerByIndex(msg.sender, i);
+            PlatformUser memory platformUser = IIdentity(identityContract).platformUser(_tokenId);
 
-            address addr = IIdentity(identityContract).ownerOf(
-                _platformId,
-                _resolverUserId
-            );
+            // skip this platformUser if it's not for this platform
+            if (!eq(platformUser.platformId, _platformId)) {
+                continue;
+            }
 
-            if (msg.sender == addr) {
-                isResolver = true;
+            // make sure they have an unclaimed bounty
+            for (uint256 j = 0; j < supportedTokens.length; j++) {
+                if (!claimed[_platformId][_repoId][_issueId][supportedTokens[j]][platformUser.userId]) {
+                    _hasUnclaimed = true;
+                    break;
+                }
+            }
+
+            // make sure they are a resolver
+            for (
+                uint256 k = 0;
+                k < resolvers[_platformId][_repoId][_issueId].length;
+                k++
+            ) {
+                string memory _resolverUserId = resolvers[_platformId][_repoId][
+                    _issueId
+                ][k];
+
+                if (eq(_resolverUserId, platformUser.userId)) {
+                    _isResolver = true;
+                    break;
+                }
+            }
+
+            if (_isResolver && _hasUnclaimed) {
                 break;
             }
         }
 
-        require(isResolver, "You are not a resolver");
+        // ensure they are actually a resolver for this issue
+        require(_isResolver, "You are not a resolver");
+
+        // ensure they have not claimed yet
+        require(_hasUnclaimed, "You have already claimed bounty");
+
         _;
+    }
+
+    function eq(string memory a, string memory b) private pure returns (bool) {
+      return keccak256(bytes(a)) == keccak256(bytes(b));
     }
 
     function postBounty(
@@ -344,6 +365,17 @@ contract Bounties is Pausable, AccessControlDefaultAdminRules {
                 );
             }
         }
+
+        // TODO: should this be configurable?
+        // 4. auto-claim for contributors
+        for (uint256 i = 0; i < _resolverIds.length; i++) {
+            _contributorClaim(
+                _platformId,
+                _repoId,
+                _issueId,
+                _resolverIds[i]
+            );
+        }
     }
 
     // returns the total amount of tokens the maintainer will receive for this bounty
@@ -367,44 +399,55 @@ contract Bounties is Pausable, AccessControlDefaultAdminRules {
         whenNotPaused
         unclaimedResolverOnly(_platformId, _repoId, _issueId)
     {
+        for (uint256 i = 0; i < IIdentity(identityContract).balanceOf(msg.sender); i++) {
+            // lookup the platformUserId for the resolver
+            PlatformUser memory platformUser;
+
+            uint256 _tokenId = IIdentity(identityContract).tokenOfOwnerByIndex(msg.sender, i);
+            platformUser = IIdentity(identityContract).platformUser(_tokenId);
+
+            if (!eq(platformUser.platformId, _platformId)) {
+                continue;
+            }
+
+            _contributorClaim(_platformId, _repoId, _issueId, platformUser.userId);
+        }
+    }
+
+    function _contributorClaim(
+        string memory _platformId,
+        string memory _repoId,
+        string memory _issueId,
+        string memory _resolverUserId
+    ) private {
+        // lookup the wallet for the resolverId
+        // if the user hasn't linked yet this will be the zero address which can never claim
+        address _resolver = IIdentity(identityContract).ownerOf(
+            _platformId,
+            _resolverUserId
+        );
+
+        if (_resolver == address(0)) {
+            // cannot claim since the resolver has not minted yet
+            return;
+        }
+
         for (uint256 i = 0; i < supportedTokens.length; i++) {
-            uint8 _claimsRemaining = 0;
             address _tokenContract = supportedTokens[i];
+            uint8 _remainingClaims = _claimsRemaining(_platformId, _repoId, _issueId, _tokenContract);
             uint256 _amount = bounties[_platformId][_repoId][_issueId][
                 _tokenContract
             ];
 
-            for (
-                uint256 j = 0;
-                j < resolvers[_platformId][_repoId][_issueId].length;
-                j++
-            ) {
-                string memory _resolverUserId = resolvers[_platformId][_repoId][
-                    _issueId
-                ][j];
-                // if the user hasn't linked yet this will be the zero address which can never claim
-                address _resolver = IIdentity(identityContract).ownerOf(
-                    _platformId,
-                    _resolverUserId
-                );
-                if (
-                    claimed[_platformId][_repoId][_issueId][_tokenContract][
-                        _resolver
-                    ] == false
-                ) {
-                    _claimsRemaining++;
-                }
-            }
-
-            uint256 _resolverAmount = _amount / _claimsRemaining;
+            uint256 _resolverAmount = _amount / _remainingClaims;
 
             if (_resolverAmount > 0) {
-                // transfer tokens from this contract to the caller
-                ERC20(_tokenContract).transfer(msg.sender, _resolverAmount);
+                // transfer tokens from this contract to the resolver
+                ERC20(_tokenContract).transfer(_resolver, _resolverAmount);
 
                 // mark the bounty as claimed for this resolver
                 claimed[_platformId][_repoId][_issueId][_tokenContract][
-                    msg.sender
+                    _resolverUserId
                 ] = true;
 
                 // reduce the bounty by the amount claimed for this user
@@ -416,7 +459,7 @@ contract Bounties is Pausable, AccessControlDefaultAdminRules {
                     _platformId,
                     _repoId,
                     _issueId,
-                    msg.sender,
+                    _resolver,
                     "contributor",
                     _tokenContract,
                     ERC20(_tokenContract).symbol(),
@@ -425,6 +468,38 @@ contract Bounties is Pausable, AccessControlDefaultAdminRules {
                 );
             }
         }
+    }
+
+    function _claimsRemaining(string memory _platformId, string memory _repoId, string memory _issueId, address _tokenContract) internal view returns (uint8) {
+        uint256 _amount = bounties[_platformId][_repoId][_issueId][
+            _tokenContract
+        ];
+
+        if (_amount < 1) {
+          return 0;
+        }
+
+        uint8 _remaining = 0;
+
+        for (
+            uint256 k = 0;
+            k < resolvers[_platformId][_repoId][_issueId].length;
+            k++
+        ) {
+            string memory _resolverUserId = resolvers[_platformId][_repoId][
+                _issueId
+            ][k];
+
+            if (
+                claimed[_platformId][_repoId][_issueId][_tokenContract][
+                    _resolverUserId
+                ] == false
+            ) {
+                _remaining++;
+            }
+        }
+
+        return _remaining;
     }
 
     function withdrawFees() public onlyRole(FINANCE_ROLE) {
