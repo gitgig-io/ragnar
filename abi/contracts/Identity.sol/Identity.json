@@ -604,7 +604,7 @@
     "inputs": [
       {
         "internalType": "address",
-        "name": "owner",
+        "name": "addr",
         "type": "address"
       }
     ],
@@ -987,22 +987,29 @@
         "type": "uint256"
       }
     ],
-    "name": "platformUserForTokenId",
+    "name": "platformUser",
     "outputs": [
       {
-        "internalType": "string",
-        "name": "platformId",
-        "type": "string"
-      },
-      {
-        "internalType": "string",
-        "name": "userId",
-        "type": "string"
-      },
-      {
-        "internalType": "string",
-        "name": "username",
-        "type": "string"
+        "components": [
+          {
+            "internalType": "string",
+            "name": "platformId",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "userId",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "username",
+            "type": "string"
+          }
+        ],
+        "internalType": "struct PlatformUser",
+        "name": "",
+        "type": "tuple"
       }
     ],
     "stateMutability": "view",
@@ -1225,7 +1232,7 @@
     "inputs": [
       {
         "internalType": "address",
-        "name": "owner",
+        "name": "addr",
         "type": "address"
       },
       {

@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.9;
 
+struct PlatformUser {
+    string platformId;
+    string userId;
+    string username;
+}
+
 interface IIdentity {
     function mint(
         address userAddress,
@@ -19,4 +25,16 @@ interface IIdentity {
         external
         view
         returns (address);
+
+    function balanceOf(address addr) external view returns (uint256);
+
+    function tokenOfOwnerByIndex(address addr, uint256 index)
+        external
+        view
+        returns (uint256);
+
+    function platformUser(uint256 tokenId)
+        external
+        view
+        returns (PlatformUser memory);
 }
