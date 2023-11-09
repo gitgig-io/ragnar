@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {ERC721, ERC721Enumerable} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
-import {IERC721Metadata} from "@openzeppelin/contracts/token/ERC721/extensions/IERC721Metadata.sol";
+import {IERC721, IERC721Metadata} from "@openzeppelin/contracts/token/ERC721/extensions/IERC721Metadata.sol";
 import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
@@ -32,13 +32,18 @@ contract Identity is
         string platformUsername
     );
 
+    event ConfigChange(address notary, string baseUri);
+
+    error AlreadyMinted();
+    error InvalidAccount();
+    error InvalidSignature();
+    error NotSupported();
+
     struct PlatformUser {
         string platformId;
         string userId;
         string username;
     }
-
-    event ConfigChange(address notary, string baseUri);
 
     bytes32 public constant CUSTODIAN_ADMIN_ROLE =
         keccak256("CUSTODIAN_ADMIN_ROLE");
@@ -103,18 +108,18 @@ contract Identity is
         bytes32 _messageHash = keccak256(_data);
         bytes32 _ethMessageHash = _messageHash.toEthSignedMessageHash();
 
-        require(
-            SignatureChecker.isValidSignatureNow(
+        bool _validSig = SignatureChecker.isValidSignatureNow(
                 notary,
                 _ethMessageHash,
                 _signature
-            ),
-            "Invalid signature"
-        );
+            );
+
+        if (!_validSig) {
+            revert InvalidSignature();
+        }
     }
 
     // TODO: switch this to EIP-712 https://eips.ethereum.org/EIPS/eip-712#specification
-    // TODO: disallow transfers
 
     function mint(
         address _userAddress,
@@ -131,7 +136,9 @@ contract Identity is
             _signature
         );
         // ensure token has not already been minted for this platform user
-        require(tokenIdForPlatformUser[_platformId][_platformUserId] == 0, "Already minted");
+        if (tokenIdForPlatformUser[_platformId][_platformUserId] != 0) {
+          revert AlreadyMinted();
+        }
 
         uint256 _tokenId = nextTokenId++;
 
@@ -172,7 +179,9 @@ contract Identity is
         uint256 _tokenId = tokenIdForPlatformUser[_platformId][_platformUserId];
 
         // make sure the identity token has been minted for the given platform user
-        require(_tokenId != 0, "Not minted");
+        if (_tokenId == 0) {
+            revert ERC721NonexistentToken(_tokenId);
+        }
 
         // update the username as this could change off-chain
         platformUserForTokenId[_tokenId].username = _platformUsername;
@@ -191,14 +200,7 @@ contract Identity is
 
     function ownerOf(string memory _platformId, string memory _platformUserId) override public view returns (address) {
       uint256 _tokenId = tokenIdForPlatformUser[_platformId][_platformUserId];
-
-      // TODO: is this right? or should we let ownerOf(tokenId) throw custom error?
-      if (_tokenId == 0) {
-        // not minted yet, so return 0 address
-        return address(0);
-      }
-
-      return ownerOf(_tokenId);
+      return _ownerOf(_tokenId);
     }
 
     function tokenURI(uint256 tokenId)
@@ -228,7 +230,10 @@ contract Identity is
     }
 
     function setNotary(address _newNotary) public onlyRole(CUSTODIAN_ROLE) {
-        require(_newNotary != address(0), "Invalid notary");
+        if (_newNotary == address(0)) {
+          revert InvalidAccount();
+        }
+
         notary = _newNotary;
         emit ConfigChange(notary, baseUri);
     }
@@ -240,4 +245,24 @@ contract Identity is
         baseUri = _newBaseUri;
         emit ConfigChange(notary, baseUri);
     }
+
+    /** BEGIN NFT transfer overrides **/
+
+    function approve(address, uint256) override(ERC721,IERC721) public pure {
+      revert NotSupported();
+    }
+
+    function setApprovalForAll(address, bool) override(ERC721,IERC721) public pure {
+      revert NotSupported();
+    }
+
+    function transferFrom(address, address, uint256) override(ERC721,IERC721) public pure {
+      revert NotSupported();
+    }
+
+    function safeTransferFrom(address, address, uint256, bytes memory) override(ERC721,IERC721) public pure {
+      revert NotSupported();
+    }
+
+    /** END NFT transfer overrides **/
 }
