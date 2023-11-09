@@ -10,6 +10,15 @@ describe("Identity", () => {
     return { identity, custodian, notary, owner, user, user2 };
   }
 
+  async function signAndMintFixture() {
+    const fixtures = await identityFixture();
+    const { identity, notary, user } = fixtures;
+    const params = [user.address, "1", "123", "coder1"];
+    const signature = await mintSignature(params, notary);
+    await identity.mint(params[0], params[1], params[2], params[3], signature);
+    return { ...fixtures, params };
+  }
+
   describe("Deployment", () => {
     it("should be able to deploy identity contract", async () => {
       const { identity } = await identityFixture();
@@ -54,6 +63,36 @@ describe("Identity", () => {
       expect(await identity.mint(params[0], params[1], params[2], params[3], signature))
         .to.emit(identity, "IdentityUpdate")
         .withArgs([1, ...params]);
+    });
+
+    it("should set platformUserForTokenId", async () => {
+      // given
+      const { identity, notary, user } = await identityFixture();
+      const params = [user.address, "1", "123", "coder1"];
+      const signature = await mintSignature(params, notary);
+
+      // when
+      await identity.mint(params[0], params[1], params[2], params[3], signature);
+
+      // then
+      const result = await identity.platformUserForTokenId(1);
+      expect(result.platformId).to.equal(params[1]);
+      expect(result.userId).to.equal(params[2]);
+      expect(result.username).to.equal(params[3]);
+    });
+
+    it("should set tokenIdForPlatformUser", async () => {
+      // given
+      const { identity, notary, user } = await identityFixture();
+      const params = [user.address, "1", "123", "coder1"];
+      const signature = await mintSignature(params, notary);
+      expect(await identity.tokenIdForPlatformUser(params[1], params[2])).to.equal(0);
+
+      // when
+      await identity.mint(params[0], params[1], params[2], params[3], signature);
+
+      // then
+      expect(await identity.tokenIdForPlatformUser(params[1], params[2])).to.equal(1);
     });
 
     it("fails to mint identity NFT with invalid signature", async () => {
@@ -121,14 +160,6 @@ describe("Identity", () => {
   });
 
   describe("Transfer", () => {
-    async function signAndMintFixture() {
-      const fixtures = await identityFixture();
-      const { identity, notary, user } = fixtures;
-      const params = [user.address, "1", "123", "coder1"];
-      const signature = await mintSignature(params, notary);
-      await identity.mint(params[0], params[1], params[2], params[3], signature);
-      return { ...fixtures, params };
-    }
     // TODO: make sure old wallet balance is 0 and new wallet balance is 1 after updating
     // TODO: what if the target wallet already has an NFT?
 
@@ -142,6 +173,22 @@ describe("Identity", () => {
 
       // then
       expect(txn.hash).to.be.a.string;
+    });
+
+    it("should update username in platformUserForTokenId", async () => {
+      // given
+      const { identity, notary, params } = await signAndMintFixture();
+      params[3] = "coder2";
+      const signature = await mintSignature(params, notary);
+
+      // when
+      await identity.transfer(params[0], params[1], params[2], params[3], signature);
+
+      // then
+      const result = await identity.platformUserForTokenId(1);
+      expect(result.platformId).to.equal(params[1]);
+      expect(result.userId).to.equal(params[2]);
+      expect(result.username).to.equal(params[3]);
     });
 
     it("should revert when paused", async () => {
@@ -201,7 +248,7 @@ describe("Identity", () => {
 
       // when
       await expect(identity.transfer(params[0], params[1], params[2], params[3], signature)).to.be.revertedWith(
-        "No identity to update"
+        "Not minted"
       );
     });
   });
@@ -417,6 +464,21 @@ describe("Identity", () => {
       expect(uri).to.equal(
         `http://localhost:4000/api/chains/${txn.chainId}/contracts/${identityAddr}/tokens/${tokenId}`
       );
+    });
+  });
+
+  describe("OwnerOf", () => {
+    it('should return zero address for non-existent token', async () => {
+      const { identity } = await identityFixture();
+      // this works, but ts compiler is not happy.
+      expect(await identity.ownerOf(ethers.Typed.string('1'), ethers.Typed.string('123')))
+        .to.equal(ethers.ZeroAddress);
+    });
+
+    it('should return owner address', async () => {
+      const { identity, user, params } = await signAndMintFixture();
+      expect(await identity.ownerOf(ethers.Typed.string(params[1]), ethers.Typed.string(params[2])))
+        .to.equal(user.address);
     });
   });
 });

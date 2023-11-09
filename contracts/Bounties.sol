@@ -194,7 +194,7 @@ contract Bounties is Pausable, AccessControlDefaultAdminRules {
                 _issueId
             ][i];
 
-            address addr = IIdentity(identityContract).walletForPlatformUser(
+            address addr = IIdentity(identityContract).ownerOf(
                 _platformId,
                 _resolverUserId
             );
@@ -258,8 +258,10 @@ contract Bounties is Pausable, AccessControlDefaultAdminRules {
         bytes memory _signature
     ) public whenNotPaused issueNotClosed(_platformId, _repoId, _issueId) {
         // lookup maintainer wallet from _maintainerUserId
-        address _maintainerAddress = IIdentity(identityContract)
-            .walletForPlatformUser(_platformId, _maintainerUserId);
+        address _maintainerAddress = IIdentity(identityContract).ownerOf(
+            _platformId,
+            _maintainerUserId
+        );
 
         // ensure the maintainer address is linked
         require(
@@ -381,8 +383,10 @@ contract Bounties is Pausable, AccessControlDefaultAdminRules {
                     _issueId
                 ][j];
                 // if the user hasn't linked yet this will be the zero address which can never claim
-                address _resolver = IIdentity(identityContract)
-                    .walletForPlatformUser(_platformId, _resolverUserId);
+                address _resolver = IIdentity(identityContract).ownerOf(
+                    _platformId,
+                    _resolverUserId
+                );
                 if (
                     claimed[_platformId][_repoId][_issueId][_tokenContract][
                         _resolver

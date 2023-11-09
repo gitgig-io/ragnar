@@ -2,22 +2,79 @@
   {
     "inputs": [
       {
+        "internalType": "address",
+        "name": "userAddress",
+        "type": "address"
+      },
+      {
         "internalType": "string",
         "name": "platformId",
         "type": "string"
       },
       {
         "internalType": "string",
-        "name": "userId",
+        "name": "platformUserId",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "platformUsername",
+        "type": "string"
+      },
+      {
+        "internalType": "bytes",
+        "name": "signature",
+        "type": "bytes"
+      }
+    ],
+    "name": "mint",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "platformId",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "platformUserId",
         "type": "string"
       }
     ],
-    "name": "walletForPlatformUser",
+    "name": "ownerOf",
     "outputs": [
       {
         "internalType": "address",
         "name": "",
         "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "platformId",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "platformUserId",
+        "type": "string"
+      }
+    ],
+    "name": "tokenIdForPlatformUser",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
       }
     ],
     "stateMutability": "view",
