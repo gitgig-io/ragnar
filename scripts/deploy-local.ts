@@ -12,9 +12,35 @@ async function main() {
   console.log(`Issuer: ${issuer.address}`);
   console.log('--------------------');
 
-  const usdc = await ethers.deployContract("TestUsdc", [1_000_000_000_000, await issuer.getAddress()]);
+  const usdc = await ethers.deployContract("TestERC20", [
+    "TestUSDC",
+    "USDC",
+    6,
+    1_000_000_000_000,
+    issuer.address
+  ]);
   const usdcAddress = await usdc.getAddress();
   console.log(`Test USDC: ${usdcAddress}`);
+
+  const arb = await ethers.deployContract("TestERC20", [
+    "TestARB",
+    "ARB",
+    16,
+    1_000_000_000_000_000,
+    issuer.address
+  ]);
+  const arbAddress = await arb.getAddress();
+  console.log(`Test ARB: ${arbAddress}`);
+
+  const weth = await ethers.deployContract("TestERC20", [
+    "TestWETH",
+    "WETH",
+    16,
+    1_000_000_000_000_000,
+    issuer.address
+  ]);
+  const wethAddress = await weth.getAddress();
+  console.log(`Test WETH: ${wethAddress}`);
 
   const identity = await ethers.deployContract("Identity", [custodian.address, notary.address, "http://localhost:4000"]);
   const identityAddress = await identity.getAddress();
@@ -25,7 +51,7 @@ async function main() {
     finance.address,
     notary.address,
     await identity.getAddress(),
-    [await usdc.getAddress()]
+    [usdcAddress, arbAddress, wethAddress]
   ]);
   const bountiesAddr = await bounties.getAddress();
   console.log(`Bounties: ${bountiesAddr}`);
@@ -34,7 +60,9 @@ async function main() {
   const addresses = {
     bounties: bountiesAddr,
     identity: identityAddress,
-    usdc: usdcAddress
+    usdc: usdcAddress,
+    arb: arbAddress,
+    weth: wethAddress
   }
 
   fs.writeFileSync("addresses.json", JSON.stringify(addresses));
