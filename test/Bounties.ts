@@ -2,15 +2,24 @@ import { expect } from "chai";
 import { ethers } from "hardhat";
 import { maintainerClaimSignature, mintSignature } from "./helpers/signatureHelpers";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { Bounties, Identity, TestUsdc } from "../typechain-types";
+import { Bounties, Identity, TestERC20 } from "../typechain-types";
+
+const BIG_SUPPLY = ethers.toBigInt("1000000000000000000000000000");
 
 describe("Bounties", () => {
   async function bountiesFixture() {
     const [owner, custodian, finance, notary, issuer, maintainer, contributor, contributor2, contributor3] = await ethers.getSigners();
 
-    const TestUsdcFactory = await ethers.getContractFactory("TestUsdc");
-    const usdc = await TestUsdcFactory.deploy(1_000_000, issuer.address);
+    const TestERC20Factory = await ethers.getContractFactory("TestERC20");
+
+    const usdc = await TestERC20Factory.deploy("USDC", "USDC", 6, 1_000_000_000_000, issuer.address);
     const usdcAddr = await usdc.getAddress();
+
+    const arb = await TestERC20Factory.deploy("Arbitrum", "ARB", 18, BIG_SUPPLY, issuer.address);
+    const arbAddr = await arb.getAddress();
+
+    const weth = await TestERC20Factory.deploy("Wrapped ETH", "WETH", 18, BIG_SUPPLY, issuer.address);
+    const wethAddr = await weth.getAddress();
 
     const IdentityFactory = await ethers.getContractFactory("Identity");
     const identity = await IdentityFactory.deploy(custodian.address, notary.address, "http://localhost:3000");
@@ -21,10 +30,10 @@ describe("Bounties", () => {
       finance.address,
       notary.address,
       await identity.getAddress(),
-      [usdcAddr]
+      [usdcAddr, arbAddr, wethAddr]
     );
 
-    return { owner, custodian, bounties, identity, usdc, finance, notary, issuer, maintainer, contributor, contributor2, contributor3 };
+    return { owner, custodian, bounties, identity, usdc, arb, weth, finance, notary, issuer, maintainer, contributor, contributor2, contributor3 };
   }
 
   async function claimableBountyFixture(contributorIds?: string[]) {
@@ -74,8 +83,8 @@ describe("Bounties", () => {
   }
 
   async function usdcFixture(issuer: HardhatEthersSigner) {
-    const TestUsdcFactory = await ethers.getContractFactory("TestUsdc");
-    const usdc = await TestUsdcFactory.deploy(1_000_000, issuer.address);
+    const TestERC20Factory = await ethers.getContractFactory("TestERC20");
+    const usdc = await TestERC20Factory.deploy("USDC", "USDC", 6, 1_000_000, issuer.address);
     return usdc;
   }
 
@@ -86,7 +95,7 @@ describe("Bounties", () => {
     issueId: string;
     bounties: Bounties;
     issuer: HardhatEthersSigner;
-    usdc: TestUsdc;
+    usdc: TestERC20;
   }
 
   async function postBounty({ amount, platformId, repoId, issueId, bounties, issuer, usdc }: PostBountyProps) {
@@ -647,7 +656,9 @@ describe("Bounties", () => {
       await bounties.connect(contributor).contributorClaim(platformId, repoId, issueId);
 
       // then
-      await expect(bounties.connect(contributor).contributorClaim(platformId, repoId, issueId)).to.be.revertedWith("You have already claimed bounty");
+      await expect(bounties.connect(contributor).contributorClaim(platformId, repoId, issueId))
+        .to.be.revertedWith("You have already claimed bounty");
+
       const expectedAmount = await bountyAmountAfterFees(bounties, amount);
       expect(await usdc.balanceOf(await contributor.getAddress())).to.be.eq(expectedAmount);
     });
@@ -995,7 +1006,7 @@ describe("Bounties", () => {
     });
 
     it('should update supported token array', async () => {
-      const { bounties, custodian, issuer, usdc } = await bountiesFixture();
+      const { bounties, custodian, issuer, usdc, arb, weth } = await bountiesFixture();
       const usdc2 = await usdcFixture(issuer);
       const usdc2Addr = await usdc2.getAddress();
 
@@ -1004,11 +1015,13 @@ describe("Bounties", () => {
 
       // then
       expect(await bounties.supportedTokens(0)).to.be.eq(await usdc.getAddress());
-      expect(await bounties.supportedTokens(1)).to.be.eq(usdc2Addr);
+      expect(await bounties.supportedTokens(1)).to.be.eq(await arb.getAddress());
+      expect(await bounties.supportedTokens(2)).to.be.eq(await weth.getAddress());
+      expect(await bounties.supportedTokens(3)).to.be.eq(usdc2Addr);
     });
 
     it('should update supported token map', async () => {
-      const { bounties, custodian, issuer, usdc } = await bountiesFixture();
+      const { bounties, custodian, issuer, usdc, arb, weth } = await bountiesFixture();
       const usdc2 = await usdcFixture(issuer);
       const usdc2Addr = await usdc2.getAddress();
 
@@ -1017,6 +1030,8 @@ describe("Bounties", () => {
 
       // then
       expect(await bounties.isSupportedToken(await usdc.getAddress())).to.be.true;
+      expect(await bounties.isSupportedToken(await arb.getAddress())).to.be.true;
+      expect(await bounties.isSupportedToken(await weth.getAddress())).to.be.true;
       expect(await bounties.isSupportedToken(usdc2Addr)).to.be.true;
     });
 

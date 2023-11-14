@@ -22,11 +22,13 @@ async function main() {
   const usdcAddress = await usdc.getAddress();
   console.log(`Test USDC: ${usdcAddress}`);
 
+  const bigSupply = ethers.toBigInt("1000000000000000000000000000");
+
   const arb = await ethers.deployContract("TestERC20", [
     "TestARB",
     "ARB",
-    16,
-    1_000_000_000_000_000,
+    18,
+    bigSupply,
     issuer.address
   ]);
   const arbAddress = await arb.getAddress();
@@ -35,8 +37,8 @@ async function main() {
   const weth = await ethers.deployContract("TestERC20", [
     "TestWETH",
     "WETH",
-    16,
-    1_000_000_000_000_000,
+    18,
+    bigSupply,
     issuer.address
   ]);
   const wethAddress = await weth.getAddress();

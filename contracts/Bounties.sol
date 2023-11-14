@@ -68,6 +68,7 @@ contract Bounties is Pausable, AccessControlDefaultAdminRules {
         uint256 amount
     );
 
+    // TODO: include the wallet that changed?
     event TokenSupportChange(
         bool supported,
         address token,
@@ -75,6 +76,7 @@ contract Bounties is Pausable, AccessControlDefaultAdminRules {
         uint8 decimals
     );
 
+    // TODO: include the wallet that changed?
     event ConfigChange(
         address notary,
         address identityContract,
@@ -190,7 +192,8 @@ contract Bounties is Pausable, AccessControlDefaultAdminRules {
 
             // make sure they have an unclaimed bounty
             for (uint256 j = 0; j < supportedTokens.length; j++) {
-                if (!claimed[_platformId][_repoId][_issueId][supportedTokens[j]][platformUser.userId]) {
+                if (!claimed[_platformId][_repoId][_issueId][supportedTokens[j]][platformUser.userId] && 
+                   bounties[_platformId][_repoId][_issueId][supportedTokens[j]] > 0) {
                     _hasUnclaimed = true;
                     break;
                 }
@@ -435,6 +438,11 @@ contract Bounties is Pausable, AccessControlDefaultAdminRules {
         for (uint256 i = 0; i < supportedTokens.length; i++) {
             address _tokenContract = supportedTokens[i];
             uint8 _remainingClaims = _claimsRemaining(_platformId, _repoId, _issueId, _tokenContract);
+
+            if (_remainingClaims == 0) {
+                continue;
+            }
+
             uint256 _amount = bounties[_platformId][_repoId][_issueId][
                 _tokenContract
             ];

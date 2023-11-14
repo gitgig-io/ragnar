@@ -53,7 +53,6 @@ contract Identity is
 
     mapping(string platformId => mapping(string platformUserId => uint256 tokenId)) public tokenIdForPlatformUser;
 
-    // TODO: do we need this?
     mapping(uint256 tokenId => PlatformUser platformUser) private platformUserForTokenId;
 
     constructor(
