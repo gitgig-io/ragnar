@@ -13,6 +13,7 @@ interface IIdentity {
         string memory platformId,
         string memory platformUserId,
         string memory platformUsername,
+        uint16 nonce,
         bytes memory signature
     ) external;
 

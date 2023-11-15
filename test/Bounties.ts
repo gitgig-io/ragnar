@@ -63,11 +63,12 @@ describe("Bounties", () => {
     platformUsername: string;
     participant: HardhatEthersSigner;
     notary: HardhatEthersSigner;
+    nonce?: number;
   }
 
-  async function linkIdentity({ identity, platformId, platformUserId, platformUsername, participant, notary }: LinkIdentityProps) {
-    const mintParams = [participant.address, platformId, platformUserId, platformUsername];
-    const mintSig = await mintSignature(mintParams, notary);
+  async function linkIdentity({ identity, platformId, platformUserId, platformUsername, participant, notary, nonce = 1 }: LinkIdentityProps) {
+    const mintParams = [participant.address, platformId, platformUserId, platformUsername, nonce];
+    const mintSig = await mintSignature(identity, mintParams, notary);
     const { mint } = identity.connect(participant);
     await mint.apply(mint, [...mintParams, mintSig] as any);
   }
@@ -192,8 +193,8 @@ describe("Bounties", () => {
       const claimSignature = await maintainerClaimSignature(claimParams, notary);
 
       // map identity for maintainer
-      const mintParams = [maintainer.address, platformId, maintainerUserId, "coder1"];
-      const mintSig = await mintSignature(mintParams, notary);
+      const mintParams = [maintainer.address, platformId, maintainerUserId, "coder1", 1];
+      const mintSig = await mintSignature(identity, mintParams, notary);
       const { mint } = identity.connect(maintainer);
       mint.apply(mint, [...mintParams, mintSig] as any);
 
