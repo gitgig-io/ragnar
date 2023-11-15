@@ -69,8 +69,46 @@
     "type": "error"
   },
   {
-    "inputs": [],
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "platformId",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "platformUserId",
+        "type": "string"
+      }
+    ],
     "name": "AlreadyMinted",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "ECDSAInvalidSignature",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "length",
+        "type": "uint256"
+      }
+    ],
+    "name": "ECDSAInvalidSignatureLength",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "s",
+        "type": "bytes32"
+      }
+    ],
+    "name": "ECDSAInvalidSignatureS",
     "type": "error"
   },
   {
@@ -208,8 +246,35 @@
     "type": "error"
   },
   {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "addr",
+        "type": "address"
+      }
+    ],
+    "name": "InvalidAddress",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint16",
+        "name": "given",
+        "type": "uint16"
+      },
+      {
+        "internalType": "uint16",
+        "name": "expected",
+        "type": "uint16"
+      }
+    ],
+    "name": "InvalidNonce",
+    "type": "error"
+  },
+  {
     "inputs": [],
-    "name": "InvalidAccount",
+    "name": "InvalidShortString",
     "type": "error"
   },
   {
@@ -236,6 +301,17 @@
       }
     ],
     "name": "SafeCastOverflowedUintDowncast",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "str",
+        "type": "string"
+      }
+    ],
+    "name": "StringTooLong",
     "type": "error"
   },
   {
@@ -375,6 +451,12 @@
   },
   {
     "anonymous": false,
+    "inputs": [],
+    "name": "EIP712DomainChanged",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
     "inputs": [
       {
         "indexed": false,
@@ -405,6 +487,12 @@
         "internalType": "string",
         "name": "platformUsername",
         "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint16",
+        "name": "nonce",
+        "type": "uint16"
       }
     ],
     "name": "IdentityUpdate",
@@ -705,6 +793,49 @@
     "type": "function"
   },
   {
+    "inputs": [],
+    "name": "eip712Domain",
+    "outputs": [
+      {
+        "internalType": "bytes1",
+        "name": "fields",
+        "type": "bytes1"
+      },
+      {
+        "internalType": "string",
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "version",
+        "type": "string"
+      },
+      {
+        "internalType": "uint256",
+        "name": "chainId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "verifyingContract",
+        "type": "address"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "salt",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "uint256[]",
+        "name": "extensions",
+        "type": "uint256[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "inputs": [
       {
         "internalType": "uint256",
@@ -811,6 +942,30 @@
   {
     "inputs": [
       {
+        "internalType": "string",
+        "name": "platformId",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "platformUserId",
+        "type": "string"
+      }
+    ],
+    "name": "lastNonceForPlatformUser",
+    "outputs": [
+      {
+        "internalType": "uint16",
+        "name": "lastNonce",
+        "type": "uint16"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "address",
         "name": "_userAddress",
         "type": "address"
@@ -829,6 +984,11 @@
         "internalType": "string",
         "name": "_platformUsername",
         "type": "string"
+      },
+      {
+        "internalType": "uint16",
+        "name": "_nonce",
+        "type": "uint16"
       },
       {
         "internalType": "bytes",
@@ -1305,6 +1465,11 @@
         "internalType": "string",
         "name": "_platformUsername",
         "type": "string"
+      },
+      {
+        "internalType": "uint16",
+        "name": "_nonce",
+        "type": "uint16"
       },
       {
         "internalType": "bytes",
