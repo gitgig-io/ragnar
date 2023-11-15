@@ -2,14 +2,15 @@
 pragma solidity ^0.8.20;
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
+import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {AccessControlDefaultAdminRules} from "@openzeppelin/contracts/access/extensions/AccessControlDefaultAdminRules.sol";
+import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {IIdentity, PlatformUser} from "./IIdentity.sol";
 
-contract Bounties is Pausable, AccessControlDefaultAdminRules {
+contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules {
     using ECDSA for bytes32;
     using MessageHashUtils for bytes32;
 
@@ -84,6 +85,16 @@ contract Bounties is Pausable, AccessControlDefaultAdminRules {
         uint8 maintainerFee
     );
 
+    error AlreadyClaimed(string platformId, string repoId, string issueId, address claimer);
+    error IdentityNotFound(string platformId, string platformUserId);
+    error InvalidAddress(address addr);
+    error InvalidFee(uint8 fee);
+    error InvalidResolver(string platformId, string repoId, string issueId, address claimer);
+    error InvalidSignature();
+    error IssueClosed(string platformId, string repoId, string issueId);
+    error TokenSupportError(address token, bool supported);
+    error NoBounty(string platformId, string repoId, string issueId, address[] tokens);
+
     // roles
     bytes32 public constant CUSTODIAN_ADMIN_ROLE =
         keccak256("CUSTODIAN_ADMIN_ROLE");
@@ -128,7 +139,11 @@ contract Bounties is Pausable, AccessControlDefaultAdminRules {
         address _notary,
         address _identityContract,
         address[] memory _supportedTokens
-    ) Pausable() AccessControlDefaultAdminRules(3 days, msg.sender) {
+    ) 
+        Pausable() 
+        AccessControlDefaultAdminRules(3 days, msg.sender) 
+        EIP712("GitGigBounties", "1")
+    {
         _grantRole(CUSTODIAN_ADMIN_ROLE, _custodian);
         _grantRole(CUSTODIAN_ROLE, _custodian);
         _grantRole(FINANCE_ADMIN_ROLE, _finance);
@@ -153,7 +168,10 @@ contract Bounties is Pausable, AccessControlDefaultAdminRules {
     }
 
     modifier supportedToken(address tokenContract) {
-        require(isSupportedToken[tokenContract], "Unsupported token");
+        if (!isSupportedToken[tokenContract]) {
+            revert TokenSupportError(tokenContract, false);
+        }
+
         _;
     }
 
@@ -162,10 +180,10 @@ contract Bounties is Pausable, AccessControlDefaultAdminRules {
         string memory _repoId,
         string memory _issueId
     ) {
-        require(
-            resolvers[_platform][_repoId][_issueId].length < 1,
-            "Issue is already closed"
-        );
+        if (resolvers[_platform][_repoId][_issueId].length > 0) {
+          revert IssueClosed(_platform, _repoId, _issueId);
+        }
+
         _;
     }
 
@@ -221,10 +239,14 @@ contract Bounties is Pausable, AccessControlDefaultAdminRules {
         }
 
         // ensure they are actually a resolver for this issue
-        require(_isResolver, "You are not a resolver");
+        if (!_isResolver) {
+          revert InvalidResolver(_platformId, _repoId, _issueId, msg.sender);
+        }
 
         // ensure they have not claimed yet
-        require(_hasUnclaimed, "You have already claimed bounty");
+        if (!_hasUnclaimed) {
+          revert AlreadyClaimed(_platformId, _repoId, _issueId, msg.sender);
+        }
 
         _;
     }
@@ -270,9 +292,46 @@ contract Bounties is Pausable, AccessControlDefaultAdminRules {
         // TOOD: what if the issue was already closed be we aren't tracking it??? FE could check...
     }
 
+    function _validateSignature(
+        string memory _maintainerUserId,
+        string memory _platformId,
+        string memory _repoId,
+        string memory _issueId,
+        string[] memory _resolverIds,
+        bytes memory _signature
+    ) private view {
+        bytes32[] memory _resolvers = new bytes32[](_resolverIds.length);
+
+        // https://stackoverflow.com/a/70762545/63738
+        for (uint256 i = 0; i < _resolverIds.length; i++) {
+          _resolvers[i] = keccak256(bytes(_resolverIds[i]));
+        }
+
+        bytes32 _digest = _hashTypedDataV4(
+          keccak256(
+            abi.encode(
+                keccak256("MaintainerClaim(string maintainerUserId,string platformId,string repoId,string issueId,string[] resolverIds)"),
+                keccak256(bytes(_maintainerUserId)),
+                keccak256(bytes(_platformId)),
+                keccak256(bytes(_repoId)),
+                keccak256(bytes(_issueId)),
+                keccak256(abi.encodePacked(_resolvers))
+            )
+          )
+        );
+
+        address _signer = ECDSA.recover(_digest, _signature);
+
+        if (_signer != notary) {
+            revert InvalidSignature();
+        }
+    }
+
     // The signature will ensure that this will always transfer tokens to the maintainer
     // regardless of who sends the transaction because the maintainerAddress is part of the
     // signature
+
+    // no need for a nonce here because the maintainer can only claim once
     function maintainerClaim(
         string memory _maintainerUserId,
         string memory _platformId,
@@ -288,39 +347,21 @@ contract Bounties is Pausable, AccessControlDefaultAdminRules {
         );
 
         // ensure the maintainer address is linked
-        require(
-            _maintainerAddress != address(0),
-            "Maintainer identity not established"
+        if (_maintainerAddress == address(0)) {
+            revert IdentityNotFound(_platformId, _maintainerUserId);
+        }
+
+        _validateSignature(
+            _maintainerUserId,
+            _platformId,
+            _repoId,
+            _issueId,
+            _resolverIds,
+            _signature
         );
 
-        // scope to reduce local variables
-        {
-            // TODO: add a modifier to ensure the given issue actually has a bounty??
-            // 1. verify the signature
-            bytes memory _data = abi.encode(
-                _maintainerUserId,
-                _platformId,
-                _repoId,
-                _issueId,
-                _resolverIds
-            );
-            bytes32 _messageHash = keccak256(_data);
-            // console.log("_messageHash: ", toHex(_messageHash));
-            bytes32 _ethMessageHash = _messageHash.toEthSignedMessageHash();
-            // console.log("_ethMessageHash: ", toHex(_ethMessageHash));
-
-            require(
-                SignatureChecker.isValidSignatureNow(
-                    notary,
-                    _ethMessageHash,
-                    _signature
-                ),
-                "Invalid signature"
-            );
-
-            // 2. mark the issue as closed
-            resolvers[_platformId][_repoId][_issueId] = _resolverIds;
-        }
+        // 2. mark the issue as closed
+        resolvers[_platformId][_repoId][_issueId] = _resolverIds;
 
         emit IssueTransition(
             _platformId,
@@ -550,6 +591,7 @@ contract Bounties is Pausable, AccessControlDefaultAdminRules {
 
                 // remove the amount from the bounty
                 bounties[_platformId][_repoId][_issueId][_token] -= amount;
+
                 emit BountySweep(
                     msg.sender,
                     _platformId,
@@ -564,7 +606,10 @@ contract Bounties is Pausable, AccessControlDefaultAdminRules {
                 swept = true;
             }
         }
-        require(swept, "No bounty to sweep");
+
+        if (!swept) {
+            revert NoBounty(_platformId, _repoId, _issueId, _tokens);
+        }
     }
 
     function isIssueClosed(
@@ -575,18 +620,30 @@ contract Bounties is Pausable, AccessControlDefaultAdminRules {
         return resolvers[_platform][_repoId][_issueId].length > 0;
     }
 
+    function _validateAddress(address _address) internal pure {
+      if (_address == address(0)) {
+        revert InvalidAddress(_address);
+      }
+    }
+
+    function _validateFee(uint8 _fee) internal pure {
+      if (_fee < 0 || _fee > 100) {
+        revert InvalidFee(_fee);
+      }
+    }
+
     function emitConfigChange() internal {
         emit ConfigChange(notary, identityContract, serviceFee, maintainerFee);
     }
 
     function setNotary(address _newNotary) public onlyRole(CUSTODIAN_ROLE) {
-        require(_newNotary != address(0), "Cannot update to zero address");
+        _validateAddress(_newNotary);
         notary = _newNotary;
         emitConfigChange();
     }
 
     function setIdentity(address _newIdentity) public onlyRole(CUSTODIAN_ROLE) {
-        require(_newIdentity != address(0), "Cannot update to zero address");
+        _validateAddress(_newIdentity);
         identityContract = _newIdentity;
         emitConfigChange();
     }
@@ -595,7 +652,7 @@ contract Bounties is Pausable, AccessControlDefaultAdminRules {
         public
         onlyRole(CUSTODIAN_ROLE)
     {
-        require(_newServiceFee >= 0 && _newServiceFee <= 100, "Invalid fee");
+        _validateFee(_newServiceFee);
         serviceFee = _newServiceFee;
         emitConfigChange();
     }
@@ -604,16 +661,15 @@ contract Bounties is Pausable, AccessControlDefaultAdminRules {
         public
         onlyRole(CUSTODIAN_ROLE)
     {
-        require(
-            _newMaintainerFee >= 0 && _newMaintainerFee <= 100,
-            "Invalid fee"
-        );
+        _validateFee(_newMaintainerFee);
         maintainerFee = _newMaintainerFee;
         emitConfigChange();
     }
 
     function addToken(address _newToken) public onlyRole(CUSTODIAN_ROLE) {
-        require(!isSupportedToken[_newToken], "Token already supported");
+        if (isSupportedToken[_newToken]) {
+            revert TokenSupportError(_newToken, true);
+        }
 
         supportedTokens.push(_newToken);
         isSupportedToken[_newToken] = true;
@@ -627,7 +683,9 @@ contract Bounties is Pausable, AccessControlDefaultAdminRules {
     }
 
     function removeToken(address _removeToken) public onlyRole(CUSTODIAN_ROLE) {
-        require(isSupportedToken[_removeToken], "Token not supported");
+        if (!isSupportedToken[_removeToken]) {
+            revert TokenSupportError(_removeToken, false);
+        }
 
         for (uint256 i = 0; i < supportedTokens.length; i++) {
             if (supportedTokens[i] == _removeToken) {

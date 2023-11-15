@@ -1,17 +1,9 @@
 import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { Identity } from "../../typechain-types";
+import { Bounties, Identity } from "../../typechain-types";
 import { TypedDataDomain, TypedDataEncoder, TypedDataField } from "ethers";
 
 export async function mintSignature(identity: Identity, params: any[], signer: HardhatEthersSigner) {
-  // const abiCoder = new ethers.AbiCoder();
-  // const msg = abiCoder.encode(["address", "string", "string", "string", "uint16"], params);
-  // console.log('msg: ', msg);
-  // const hash = ethers.keccak256(msg);
-  // console.log('data hash: ', hash);
-  // without this conversion the number of bytes will be 64 instead of 32 which is wrong.
-  // const hashBytes = ethers.toBeArray(hash);
-
   const domain: TypedDataDomain = {
     name: "GitGigIdentity",
     version: "1",
@@ -52,27 +44,32 @@ export async function mintSignature(identity: Identity, params: any[], signer: H
   return signature;
 }
 
+export async function maintainerClaimSignature(bounties: Bounties, params: any[], signer: HardhatEthersSigner) {
+  const domain: TypedDataDomain = {
+    name: "GitGigBounties",
+    version: "1",
+    chainId: 1337,
+    verifyingContract: await bounties.getAddress(),
+  };
 
-// export async function mintSignature(params: any[], signer: HardhatEthersSigner) {
-//   const abiCoder = new ethers.AbiCoder();
-//   const msg = abiCoder.encode(["address", "string", "string", "string", "uint16"], params);
-//   // console.log('msg: ', msg);
-//   const hash = ethers.keccak256(msg);
-//   // console.log('data hash: ', hash);
-//   // without this conversion the number of bytes will be 64 instead of 32 which is wrong.
-//   const hashBytes = ethers.toBeArray(hash);
-//   const signature = await signer.signMessage(hashBytes);
-//   return signature;
-// }
+  const types: Record<string, TypedDataField[]> = {
+    MaintainerClaim: [
+      { name: "maintainerUserId", type: "string" },
+      { name: "platformId", type: "string" },
+      { name: "repoId", type: "string" },
+      { name: "issueId", type: "string" },
+      { name: "resolverIds", type: "string[]" },
+    ]
+  };
 
-export async function maintainerClaimSignature(params: any[], signer: HardhatEthersSigner) {
-  const abiCoder = new ethers.AbiCoder();
-  const msg = abiCoder.encode(["string", "string", "string", "string", "string[]"], params);
-  const hash = ethers.keccak256(msg);
-  // console.log('messageHash: ', hash);
-  // without this conversion the number of bytes will be 64 instead of 32 which is wrong.
-  const hashBytes = ethers.toBeArray(hash);
-  // console.log('ethMessageHash: ', ethers.hashMessage(hashBytes));
-  const signature = await signer.signMessage(hashBytes);
+  const values: Record<string, any> = {
+    maintainerUserId: params[0] as string,
+    platformId: params[1] as string,
+    repoId: params[2] as string,
+    issueId: params[3] as string,
+    resolverIds: params[4] as string[],
+  };
+
+  const signature = await signer.signTypedData(domain, types, values);
   return signature;
 }

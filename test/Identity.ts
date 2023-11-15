@@ -73,7 +73,8 @@ describe("Identity", () => {
 
       // when/then
       await expect(applyMint(identity, params, signature))
-        .to.be.revertedWithCustomError(identity, 'InvalidNonce');
+        .to.be.revertedWithCustomError(identity, 'InvalidNonce')
+        .withArgs(2, 1);
     });
 
     it("should revert when paused", async () => {
@@ -152,13 +153,16 @@ describe("Identity", () => {
     it("fails to mint a second nft for a user", async () => {
       // given
       const { identity, notary, user } = await identityFixture();
-      const params = [user.address, "1", "123", "coder1", 1];
+      const platformId = "1";
+      const platformUserId = "123";
+      const params = [user.address, platformId, platformUserId, "coder1", 1];
       const signature = await mintSignature(identity, params, notary);
       await applyMint(identity, params, signature);
 
       // when
       await expect(applyMint(identity, params, signature))
-        .to.be.revertedWithCustomError(identity, "AlreadyMinted");
+        .to.be.revertedWithCustomError(identity, "AlreadyMinted")
+        .withArgs(platformId, platformUserId);
     });
 
     // TODO: add tests for nft attributes
@@ -392,7 +396,8 @@ describe("Identity", () => {
 
       // when/then
       await expect(identity.connect(custodian).setNotary(ethers.ZeroAddress))
-        .to.be.revertedWithCustomError(identity, "InvalidAccount");
+        .to.be.revertedWithCustomError(identity, "InvalidAddress")
+        .withArgs(ethers.ZeroAddress);
     });
   });
 

@@ -33,9 +33,9 @@ contract Identity is
 
     event ConfigChange(address notary, string baseUri);
 
-    error AlreadyMinted();
-    error InvalidAccount();
-    error InvalidNonce();
+    error AlreadyMinted(string platformId, string platformUserId);
+    error InvalidAddress(address addr);
+    error InvalidNonce(uint16 given, uint16 expected);
     error InvalidSignature();
     error NotSupported();
 
@@ -93,8 +93,10 @@ contract Identity is
         string memory _platformUserId,
         uint16 _nonce
     ) private {
-        if (_nonce != lastNonceForPlatformUser[_platformId][_platformUserId] + 1) {
-          revert InvalidNonce();
+        uint16 _expectedNonce = lastNonceForPlatformUser[_platformId][_platformUserId] + 1;
+
+        if (_nonce != _expectedNonce) {
+          revert InvalidNonce(_nonce, _expectedNonce);
         }
 
         lastNonceForPlatformUser[_platformId][_platformUserId] = _nonce;
@@ -128,8 +130,6 @@ contract Identity is
         }
     }
 
-    // TODO: switch this to EIP-712 https://eips.ethereum.org/EIPS/eip-712#specification
-
     function mint(
         address _userAddress,
         string memory _platformId,
@@ -140,7 +140,7 @@ contract Identity is
     ) public whenNotPaused {
         // ensure token has not already been minted for this platform user
         if (tokenIdForPlatformUser[_platformId][_platformUserId] != 0) {
-          revert AlreadyMinted();
+          revert AlreadyMinted(_platformId, _platformUserId);
         }
 
         _validateNonce(_platformId, _platformUserId, _nonce);
@@ -251,7 +251,7 @@ contract Identity is
 
     function setNotary(address _newNotary) public onlyRole(CUSTODIAN_ROLE) {
         if (_newNotary == address(0)) {
-          revert InvalidAccount();
+          revert InvalidAddress(_newNotary);
         }
 
         notary = _newNotary;
