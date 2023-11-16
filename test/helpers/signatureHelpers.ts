@@ -1,7 +1,6 @@
-import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { Bounties, Identity } from "../../typechain-types";
-import { TypedDataDomain, TypedDataEncoder, TypedDataField } from "ethers";
+import { TypedDataDomain, TypedDataField } from "ethers";
 
 export async function mintSignature(identity: Identity, params: any[], signer: HardhatEthersSigner) {
   const domain: TypedDataDomain = {

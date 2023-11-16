@@ -43,6 +43,8 @@ contract Identity is
         keccak256("CUSTODIAN_ADMIN_ROLE");
     bytes32 public constant CUSTODIAN_ROLE = keccak256("CUSTODIAN_ROLE");
 
+    bytes32 private constant TYPE_HASH = keccak256("Identity(address userAddress,string platformId,string platformUserId,string platformUsername,uint16 nonce)");
+
     // start at 1 so we can tell the difference between a minted and non-minted
     // token for a user in the tokenIdForPlatformUser mapping
     uint256 private nextTokenId = 1;
@@ -113,7 +115,7 @@ contract Identity is
         bytes32 _digest = _hashTypedDataV4(
           keccak256(
             abi.encode(
-                keccak256("Identity(address userAddress,string platformId,string platformUserId,string platformUsername,uint16 nonce)"),
+                TYPE_HASH,
                 _userAddress,
                 keccak256(bytes(_platformId)),
                 keccak256(bytes(_platformUserId)),

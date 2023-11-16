@@ -103,6 +103,8 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules {
         keccak256("FINANCE_ADMIN_ROLE");
     bytes32 public constant FINANCE_ROLE = keccak256("FINANCE_ROLE");
 
+    bytes32 private constant TYPE_HASH = keccak256("MaintainerClaim(string maintainerUserId,string platformId,string repoId,string issueId,string[] resolverIds)");
+
     // for verifying signatures
     address public notary;
 
@@ -310,7 +312,7 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules {
         bytes32 _digest = _hashTypedDataV4(
           keccak256(
             abi.encode(
-                keccak256("MaintainerClaim(string maintainerUserId,string platformId,string repoId,string issueId,string[] resolverIds)"),
+                TYPE_HASH,
                 keccak256(bytes(_maintainerUserId)),
                 keccak256(bytes(_platformId)),
                 keccak256(bytes(_repoId)),
