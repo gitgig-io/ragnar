@@ -1,6 +1,7 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import { mintSignature } from "./helpers/signatureHelpers";
+import { Identity } from "../typechain-types";
 
 describe("Identity", () => {
   async function identityFixture() {
@@ -10,14 +11,38 @@ describe("Identity", () => {
     return { identity, custodian, notary, owner, user, user2 };
   }
 
+  async function applyMint(identity: Identity, params: any[], signature: Uint8Array | string) {
+    return identity.mint(
+      params[0] as string,
+      params[1] as string,
+      params[2] as string,
+      params[3] as string,
+      params[4] as number,
+      signature
+    );
+  }
+
+  async function applyTransfer(identity: Identity, params: any[], signature: string) {
+    return identity.transfer(
+      params[0] as string,
+      params[1] as string,
+      params[2] as string,
+      params[3] as string,
+      params[4] as number,
+      signature
+    );
+  }
+
   async function signAndMintFixture() {
     const fixtures = await identityFixture();
     const { identity, notary, user } = fixtures;
-    const params = [user.address, "1", "123", "coder1"];
-    const signature = await mintSignature(params, notary);
-    await identity.mint(params[0], params[1], params[2], params[3], signature);
-    return { ...fixtures, params };
+    const mintParams = [user.address, "1", "123", "coder1", 1];
+    const signature = await mintSignature(identity, mintParams, notary);
+    await applyMint(identity, mintParams, signature);
+    const transferParams = mintParams.slice(0, 4).concat([2]);
+    return { ...fixtures, mintParams, transferParams };
   }
+
 
   describe("Deployment", () => {
     it("should be able to deploy identity contract", async () => {
@@ -30,14 +55,26 @@ describe("Identity", () => {
     it("should be able to mint identity NFT", async () => {
       // given
       const { identity, notary, user } = await identityFixture();
-      const params = [user.address, "1", "123", "coder1"];
-      const signature = await mintSignature(params, notary);
+      const params = [user.address, "1", "123", "coder1", 1];
+      const signature = await mintSignature(identity, params, notary);
 
       // when
-      const txn = await identity.mint(params[0], params[1], params[2], params[3], signature);
+      const txn = await applyMint(identity, params, signature);
 
       // then
       expect(txn.hash).to.be.a.string;
+    });
+
+    it("should revert with invalid nonce", async () => {
+      // given
+      const { identity, notary, user } = await identityFixture();
+      const params = [user.address, "1", "123", "coder1", 2];
+      const signature = await mintSignature(identity, params, notary);
+
+      // when/then
+      await expect(applyMint(identity, params, signature))
+        .to.be.revertedWithCustomError(identity, 'InvalidNonce')
+        .withArgs(2, 1);
     });
 
     it("should revert when paused", async () => {
@@ -45,22 +82,22 @@ describe("Identity", () => {
       const { identity, custodian, notary, user } = await identityFixture();
       await identity.connect(custodian).pause();
       expect(await identity.paused()).to.be.true;
-      const params = [user.address, "1", "123", "coder1"];
-      const signature = await mintSignature(params, notary);
+      const params = [user.address, "1", "123", "coder1", 1];
+      const signature = await mintSignature(identity, params, notary);
 
       // when/then
-      await expect(identity.mint(params[0], params[1], params[2], params[3], signature))
+      await expect(applyMint(identity, params, signature))
         .to.be.revertedWithCustomError(identity, 'EnforcedPause');
     });
 
     it("should emit an IdentityUpdate event", async () => {
       // given
       const { identity, notary, user } = await identityFixture();
-      const params = [user.address, "1", "123", "coder1"];
-      const signature = await mintSignature(params, notary);
+      const params = [user.address, "1", "123", "coder1", 1];
+      const signature = await mintSignature(identity, params, notary);
 
       // when/then
-      expect(await identity.mint(params[0], params[1], params[2], params[3], signature))
+      expect(await identity.mint(user.address, "1", "123", "coder1", 1, signature))
         .to.emit(identity, "IdentityUpdate")
         .withArgs([1, ...params]);
     });
@@ -68,11 +105,11 @@ describe("Identity", () => {
     it("should set platformUserForTokenId", async () => {
       // given
       const { identity, notary, user } = await identityFixture();
-      const params = [user.address, "1", "123", "coder1"];
-      const signature = await mintSignature(params, notary);
+      const params = [user.address, "1", "123", "coder1", 1];
+      const signature = await mintSignature(identity, params, notary);
 
       // when
-      await identity.mint(params[0], params[1], params[2], params[3], signature);
+      await identity.mint(user.address, "1", "123", "coder1", 1, signature);
 
       // then
       const result = await identity.platformUser(1);
@@ -84,45 +121,48 @@ describe("Identity", () => {
     it("should set tokenIdForPlatformUser", async () => {
       // given
       const { identity, notary, user } = await identityFixture();
-      const params = [user.address, "1", "123", "coder1"];
-      const signature = await mintSignature(params, notary);
-      expect(await identity.tokenIdForPlatformUser(params[1], params[2])).to.equal(0);
+      const params = [user.address, "1", "123", "coder1", 1];
+      const signature = await mintSignature(identity, params, notary);
+      expect(await identity.tokenIdForPlatformUser("1", "123")).to.equal(0);
 
       // when
-      await identity.mint(params[0], params[1], params[2], params[3], signature);
+      await identity.mint(user.address, "1", "123", "coder1", 1, signature);
 
       // then
-      expect(await identity.tokenIdForPlatformUser(params[1], params[2])).to.equal(1);
+      expect(await identity.tokenIdForPlatformUser("1", "123")).to.equal(1);
     });
 
-    it("fails to mint identity NFT with invalid signature", async () => {
+    it("fails to mint identity NFT with invalid signature length", async () => {
       const { identity, user } = await identityFixture();
-      const params = [user.address, "1", "123", "coder1"];
-      const signature = ethers.toUtf8Bytes("abc123");
+      const params = [user.address, "1", "123", "coder1", 1];
+      const signature = ethers.toUtf8Bytes("abc123")
 
-      await expect(identity.mint(params[0], params[1], params[2], params[3], signature))
-        .to.be.revertedWithCustomError(identity, "InvalidSignature");
+      await expect(applyMint(identity, params, signature))
+        .to.be.revertedWithCustomError(identity, "ECDSAInvalidSignatureLength");
     });
 
     it("fails to mint identity NFT with signature from wrong account", async () => {
       const { identity, owner, user } = await identityFixture();
-      const params = [user.address, "1", "123", "coder1"];
-      const signature = await mintSignature(params, owner);
+      const params = [user.address, "1", "123", "coder1", 1];
+      const signature = await mintSignature(identity, params, owner);
 
-      await expect(identity.mint(params[0], params[1], params[2], params[3], signature))
+      await expect(applyMint(identity, params, signature))
         .to.be.revertedWithCustomError(identity, "InvalidSignature");
     });
 
     it("fails to mint a second nft for a user", async () => {
       // given
       const { identity, notary, user } = await identityFixture();
-      const params = [user.address, "1", "123", "coder1"];
-      const signature = await mintSignature(params, notary);
-      await identity.mint(params[0], params[1], params[2], params[3], signature);
+      const platformId = "1";
+      const platformUserId = "123";
+      const params = [user.address, platformId, platformUserId, "coder1", 1];
+      const signature = await mintSignature(identity, params, notary);
+      await applyMint(identity, params, signature);
 
       // when
-      await expect(identity.mint(params[0], params[1], params[2], params[3], signature))
-        .to.be.revertedWithCustomError(identity, "AlreadyMinted");
+      await expect(applyMint(identity, params, signature))
+        .to.be.revertedWithCustomError(identity, "AlreadyMinted")
+        .withArgs(platformId, platformUserId);
     });
 
     // TODO: add tests for nft attributes
@@ -131,7 +171,7 @@ describe("Identity", () => {
     //   const { notary, user } = await identityFixture();
 
     //   const params = [user.address, "1", "123456", "bob"];
-    //   const signature = await mintSignature(params, notary);
+    //   const signature = await mintSignature(identity, params, notary);
     //   // const msg = ethers.toUtf8Bytes("GitGig Wallet Link: 123456")
     //   // const hash = ethers.keccak256(msg);
     //   // // without this conversion the number of bytes will be 64 instead of 32 which is wrong.
@@ -161,12 +201,12 @@ describe("Identity", () => {
     // TODO: what if the target wallet already has an NFT?
 
     it("should be able to transfer identity NFT", async () => {
-      const { identity, notary, user2, params } = await signAndMintFixture();
+      const { identity, notary, user2, transferParams: params } = await signAndMintFixture();
       params[0] = user2.address;
-      const signature = await mintSignature(params, notary);
+      const signature = await mintSignature(identity, params, notary);
 
       // when
-      const txn = await identity.transfer(params[0], params[1], params[2], params[3], signature);
+      const txn = await applyTransfer(identity, params, signature);
 
       // then
       expect(txn.hash).to.be.a.string;
@@ -174,12 +214,12 @@ describe("Identity", () => {
 
     it("should update username in platformUserForTokenId", async () => {
       // given
-      const { identity, notary, params } = await signAndMintFixture();
+      const { identity, notary, transferParams: params } = await signAndMintFixture();
       params[3] = "coder2";
-      const signature = await mintSignature(params, notary);
+      const signature = await mintSignature(identity, params, notary);
 
       // when
-      await identity.transfer(params[0], params[1], params[2], params[3], signature);
+      await applyTransfer(identity, params, signature);
 
       // then
       const result = await identity.platformUser(1);
@@ -188,26 +228,37 @@ describe("Identity", () => {
       expect(result.username).to.equal(params[3]);
     });
 
+    it("should revert with invalid nonce", async () => {
+      // given
+      const { identity, notary, transferParams: params } = await signAndMintFixture();
+      params[4] = 3;
+      const signature = await mintSignature(identity, params, notary);
+
+      // when/then
+      await expect(applyTransfer(identity, params, signature))
+        .to.be.revertedWithCustomError(identity, 'InvalidNonce');
+    });
+
     it("should revert when paused", async () => {
       // given
-      const { identity, custodian, notary, user2, params } = await signAndMintFixture();
+      const { identity, custodian, notary, user2, transferParams: params } = await signAndMintFixture();
       await identity.connect(custodian).pause();
       expect(await identity.paused()).to.be.true;
       params[0] = user2.address;
-      const signature = await mintSignature(params, notary);
+      const signature = await mintSignature(identity, params, notary);
 
       // when/then
-      await expect(identity.transfer(params[0], params[1], params[2], params[3], signature))
+      await expect(applyTransfer(identity, params, signature))
         .to.be.revertedWithCustomError(identity, 'EnforcedPause');
     });
 
     it("NFT should transfer to new wallet", async () => {
-      const { identity, notary, user, user2, params } = await signAndMintFixture();
+      const { identity, notary, user, user2, transferParams: params } = await signAndMintFixture();
       params[0] = user2.address;
-      const signature = await mintSignature(params, notary);
+      const signature = await mintSignature(identity, params, notary);
 
       // when
-      await identity.transfer(params[0], params[1], params[2], params[3], signature);
+      await applyTransfer(identity, params, signature);
 
       // then
       expect(await identity.balanceOf(user2.address)).to.be.equal(1);
@@ -216,34 +267,34 @@ describe("Identity", () => {
 
     it("should emit an IdentityUpdate event", async () => {
       // given
-      const { identity, notary, user, user2, params } = await signAndMintFixture();
+      const { identity, notary, user, user2, transferParams: params } = await signAndMintFixture();
       params[0] = user2.address;
       const tokenId = await identity.tokenOfOwnerByIndex(user.address, 0);
-      const signature = await mintSignature(params, notary);
+      const signature = await mintSignature(identity, params, notary);
 
       // when/then
-      expect(await identity.transfer(params[0], params[1], params[2], params[3], signature))
+      expect(await applyTransfer(identity, params, signature))
         .to.emit(identity, "IdentityUpdate")
         .withArgs([tokenId, ...params]);
     });
 
     it("fails to transfer identity NFT with invalid signature", async () => {
-      const { identity, notary, user2, params } = await signAndMintFixture();
+      const { identity, notary, user2, transferParams: params } = await signAndMintFixture();
       // generate sig with old user address
-      const signature = await mintSignature(params, notary);
+      const signature = await mintSignature(identity, params, notary);
       params[0] = user2.address;
 
-      await expect(identity.transfer(params[0], params[1], params[2], params[3], signature))
+      await expect(applyTransfer(identity, params, signature))
         .to.be.revertedWithCustomError(identity, "InvalidSignature");
     });
 
     it("fails to transfer identity NFT when not yet minted", async () => {
       const { identity, notary, user } = await identityFixture();
-      const params = [user.address, "1", "123", "coder1"];
-      const signature = await mintSignature(params, notary);
+      const params = [user.address, "1", "123", "coder1", 1];
+      const signature = await mintSignature(identity, params, notary);
 
       // when
-      await expect(identity.transfer(params[0], params[1], params[2], params[3], signature))
+      await expect(applyTransfer(identity, params, signature))
         .to.be.revertedWithCustomError(identity, "ERC721NonexistentToken");
     });
   });
@@ -345,7 +396,8 @@ describe("Identity", () => {
 
       // when/then
       await expect(identity.connect(custodian).setNotary(ethers.ZeroAddress))
-        .to.be.revertedWithCustomError(identity, "InvalidAccount");
+        .to.be.revertedWithCustomError(identity, "InvalidAddress")
+        .withArgs(ethers.ZeroAddress);
     });
   });
 
@@ -445,9 +497,9 @@ describe("Identity", () => {
   describe("TokenURI", () => {
     it('should return token URI', async () => {
       const { identity, user, notary } = await identityFixture();
-      const params = [user.address, "1", "123", "coder1"];
-      const signature = await mintSignature(params, notary);
-      const txn = await identity.mint(params[0], params[1], params[2], params[3], signature);
+      const params = [user.address, "1", "123", "coder1", 1];
+      const signature = await mintSignature(identity, params, notary);
+      const txn = await applyMint(identity, params, signature);
       const tokenId = await identity.tokenOfOwnerByIndex(user, 0);
       const identityAddr = (await identity.getAddress()).toLowerCase();
 
@@ -471,16 +523,16 @@ describe("Identity", () => {
     });
 
     it('should return owner address', async () => {
-      const { identity, user, params } = await signAndMintFixture();
-      expect(await identity.ownerOf(ethers.Typed.string(params[1]), ethers.Typed.string(params[2])))
+      const { identity, user, mintParams: params } = await signAndMintFixture();
+      expect(await identity.ownerOf(ethers.Typed.string(params[1] as string), ethers.Typed.string(params[2] as string)))
         .to.equal(user.address);
     });
   });
 
   describe("Approve", () => {
     it('should revert', async () => {
-      const { identity, user, user2, params } = await signAndMintFixture();
-      const tokenId = await identity.tokenIdForPlatformUser(params[1], params[2]);
+      const { identity, user, user2, mintParams: params } = await signAndMintFixture();
+      const tokenId = await identity.tokenIdForPlatformUser(params[1] as string, params[2] as string);
       expect(tokenId).to.be.greaterThan(0);
 
       // when/then
@@ -491,8 +543,8 @@ describe("Identity", () => {
 
   describe("SetApprovalForAll", () => {
     it('should revert', async () => {
-      const { identity, user, user2, params } = await signAndMintFixture();
-      const tokenId = await identity.tokenIdForPlatformUser(params[1], params[2]);
+      const { identity, user, user2, mintParams: params } = await signAndMintFixture();
+      const tokenId = await identity.tokenIdForPlatformUser(params[1] as string, params[2] as string);
       expect(tokenId).to.be.greaterThan(0);
 
       // when/then
@@ -503,8 +555,8 @@ describe("Identity", () => {
 
   describe("TransferFrom", () => {
     it('should revert', async () => {
-      const { identity, user, user2, params } = await signAndMintFixture();
-      const tokenId = await identity.tokenIdForPlatformUser(params[1], params[2]);
+      const { identity, user, user2, mintParams: params } = await signAndMintFixture();
+      const tokenId = await identity.tokenIdForPlatformUser(params[1] as string, params[2] as string);
       expect(tokenId).to.be.greaterThan(0);
 
       // when/then
@@ -515,8 +567,8 @@ describe("Identity", () => {
 
   describe("SafeTransferFrom/3", () => {
     it('should revert', async () => {
-      const { identity, user, user2, params } = await signAndMintFixture();
-      const tokenId = await identity.tokenIdForPlatformUser(params[1], params[2]);
+      const { identity, user, user2, mintParams: params } = await signAndMintFixture();
+      const tokenId = await identity.tokenIdForPlatformUser(params[1] as string, params[2] as string);
       expect(tokenId).to.be.greaterThan(0);
 
       // when/then
@@ -527,8 +579,8 @@ describe("Identity", () => {
 
   describe("SafeTransferFrom/4", () => {
     it('should revert', async () => {
-      const { identity, user, user2, params } = await signAndMintFixture();
-      const tokenId = await identity.tokenIdForPlatformUser(params[1], params[2]);
+      const { identity, user, user2, mintParams: params } = await signAndMintFixture();
+      const tokenId = await identity.tokenIdForPlatformUser(params[1] as string, params[2] as string);
       expect(tokenId).to.be.greaterThan(0);
       const bytes = ethers.toUtf8Bytes("");
 

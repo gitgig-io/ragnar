@@ -41,6 +41,11 @@
         "type": "string"
       },
       {
+        "internalType": "uint16",
+        "name": "nonce",
+        "type": "uint16"
+      },
+      {
         "internalType": "bytes",
         "name": "signature",
         "type": "bytes"

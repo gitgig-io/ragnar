@@ -38,7 +38,7 @@ describe("Bounties", () => {
 
   async function claimableBountyFixture(contributorIds?: string[]) {
     const fixtures = await bountiesFixture();
-    const { notary, maintainer, contributor, contributor2, contributor3 } = fixtures;
+    const { bounties, notary, maintainer, contributor, contributor2, contributor3 } = fixtures;
 
     const platformId = "1";
     const maintainerUserId = "maintainer1";
@@ -49,7 +49,7 @@ describe("Bounties", () => {
     const contributorUserIds = contributorIds || [contributorUserId];
     const contributorSigners = [contributor, contributor2, contributor3].slice(0, contributorUserIds.length);
     const claimParams = [maintainerUserId, platformId, repoId, issueId, contributorUserIds];
-    const claimSignature = await maintainerClaimSignature(claimParams, notary);
+    const claimSignature = await maintainerClaimSignature(bounties, claimParams, notary);
     const { maintainerClaim } = fixtures.bounties.connect(maintainer);
     const executeMaintainerClaim = async () => await maintainerClaim.apply(maintainerClaim, [...claimParams, claimSignature] as any);
 
@@ -63,11 +63,12 @@ describe("Bounties", () => {
     platformUsername: string;
     participant: HardhatEthersSigner;
     notary: HardhatEthersSigner;
+    nonce?: number;
   }
 
-  async function linkIdentity({ identity, platformId, platformUserId, platformUsername, participant, notary }: LinkIdentityProps) {
-    const mintParams = [participant.address, platformId, platformUserId, platformUsername];
-    const mintSig = await mintSignature(mintParams, notary);
+  async function linkIdentity({ identity, platformId, platformUserId, platformUsername, participant, notary, nonce = 1 }: LinkIdentityProps) {
+    const mintParams = [participant.address, platformId, platformUserId, platformUsername, nonce];
+    const mintSig = await mintSignature(identity, mintParams, notary);
     const { mint } = identity.connect(participant);
     await mint.apply(mint, [...mintParams, mintSig] as any);
   }
@@ -180,7 +181,9 @@ describe("Bounties", () => {
 
     it("should not be able to post bounty with unsupported token", async () => {
       const { bounties, issuer } = await bountiesFixture();
-      await expect(bounties.connect(issuer).postBounty("1", "gitgig-io/ragnar", "123", issuer.address, 5)).to.be.revertedWith("Unsupported token");
+      await expect(bounties.connect(issuer).postBounty("1", "gitgig-io/ragnar", "123", issuer.address, 5))
+        .to.be.revertedWithCustomError(bounties, "TokenSupportError")
+        .withArgs(issuer.address, false);
     });
 
     it("should not be able to post bounty on closed issue", async () => {
@@ -188,12 +191,14 @@ describe("Bounties", () => {
       const { bounties, identity, maintainer, notary, issuer, contributor, usdc } = await bountiesFixture();
       const platformId = "1";
       const maintainerUserId = "m1";
-      const claimParams = [maintainerUserId, platformId, "gitgig-io/ragnar", "123", [contributor.address]];
-      const claimSignature = await maintainerClaimSignature(claimParams, notary);
+      const repoId = "gitgig-io/ragnar";
+      const issueId = "123";
+      const claimParams = [maintainerUserId, platformId, repoId, issueId, [contributor.address]];
+      const claimSignature = await maintainerClaimSignature(bounties, claimParams, notary);
 
       // map identity for maintainer
-      const mintParams = [maintainer.address, platformId, maintainerUserId, "coder1"];
-      const mintSig = await mintSignature(mintParams, notary);
+      const mintParams = [maintainer.address, platformId, maintainerUserId, "coder1", 1];
+      const mintSig = await mintSignature(identity, mintParams, notary);
       const { mint } = identity.connect(maintainer);
       mint.apply(mint, [...mintParams, mintSig] as any);
 
@@ -202,7 +207,9 @@ describe("Bounties", () => {
       await maintainerClaim.apply(maintainerClaim, [...claimParams, claimSignature] as any);
 
       // then
-      await expect(bounties.connect(issuer).postBounty("1", "gitgig-io/ragnar", "123", await usdc.getAddress(), 5)).to.be.revertedWith("Issue is already closed");
+      await expect(bounties.connect(issuer).postBounty(platformId, repoId, issueId, await usdc.getAddress(), 5))
+        .to.be.revertedWithCustomError(bounties, "IssueClosed")
+        .withArgs(platformId, repoId, issueId);
     });
 
     it("should emit a BountyCreate event", async () => {
@@ -320,9 +327,11 @@ describe("Bounties", () => {
     });
 
     it("should revert if issue is already closed", async () => {
-      const { executeMaintainerClaim } = await claimableLinkedBountyFixture();
+      const { bounties, platformId, repoId, issueId, executeMaintainerClaim } = await claimableLinkedBountyFixture();
       await executeMaintainerClaim();
-      await expect(executeMaintainerClaim()).to.be.revertedWith("Issue is already closed");
+      await expect(executeMaintainerClaim())
+        .to.be.revertedWithCustomError(bounties, "IssueClosed")
+        .withArgs(platformId, repoId, issueId);
     });
 
     it("should emit issue closed event", async () => {
@@ -340,16 +349,19 @@ describe("Bounties", () => {
     });
 
     it("should revert if maintainer has not linked identity", async () => {
-      const { executeMaintainerClaim } = await claimableBountyFixture();
-      await expect(executeMaintainerClaim()).to.be.revertedWith("Maintainer identity not established");
+      const { bounties, platformId, maintainerUserId, executeMaintainerClaim } = await claimableBountyFixture();
+      await expect(executeMaintainerClaim())
+        .to.be.revertedWithCustomError(bounties, "IdentityNotFound")
+        .withArgs(platformId, maintainerUserId);
     });
 
     it("should revert with invalid signature", async () => {
       const { bounties, claimParams, maintainer } = await claimableLinkedBountyFixture();
       // signing with maintainer key instead of notary key
-      const wrongSignature = await maintainerClaimSignature(claimParams, maintainer);
+      const wrongSignature = await maintainerClaimSignature(bounties, claimParams, maintainer);
       const { maintainerClaim } = bounties.connect(maintainer);
-      await expect(maintainerClaim.apply(maintainerClaim, [...claimParams, wrongSignature] as any)).to.be.revertedWith("Invalid signature");
+      await expect(maintainerClaim.apply(maintainerClaim, [...claimParams, wrongSignature] as any))
+        .to.be.revertedWithCustomError(bounties, "InvalidSignature");
     });
   });
 
@@ -407,7 +419,8 @@ describe("Bounties", () => {
 
       // when/then
       await expect(bounties.connect(contributor).contributorClaim(platformId, repoId, issueId))
-        .to.be.revertedWith("You are not a resolver");
+        .to.be.revertedWithCustomError(bounties, 'InvalidResolver')
+        .withArgs(platformId, repoId, issueId, contributor.address);
     });
 
     it("should revert when paused", async () => {
@@ -627,7 +640,8 @@ describe("Bounties", () => {
       });
 
       await expect(bounties.connect(contributor3).contributorClaim(platformId, repoId, issueId))
-        .to.be.revertedWith("You are not a resolver");
+        .to.be.revertedWithCustomError(bounties, 'InvalidResolver')
+        .withArgs(platformId, repoId, issueId, contributor3.address);
       expect(await usdc.balanceOf(await contributor3.getAddress())).to.be.eq(0);
     });
 
@@ -657,7 +671,8 @@ describe("Bounties", () => {
 
       // then
       await expect(bounties.connect(contributor).contributorClaim(platformId, repoId, issueId))
-        .to.be.revertedWith("You have already claimed bounty");
+        .to.be.revertedWithCustomError(bounties, "AlreadyClaimed")
+        .withArgs(platformId, repoId, issueId, contributor.address);
 
       const expectedAmount = await bountyAmountAfterFees(bounties, amount);
       expect(await usdc.balanceOf(await contributor.getAddress())).to.be.eq(expectedAmount);
@@ -794,6 +809,15 @@ describe("Bounties", () => {
       expect(await bounties.notary()).to.be.eq(finance.address);
     });
 
+    it('should revert with invalid notary address', async () => {
+      const { bounties, custodian } = await bountiesFixture();
+
+      // when/then
+      await expect(bounties.connect(custodian).setNotary(ethers.ZeroAddress))
+        .to.be.revertedWithCustomError(bounties, "InvalidAddress")
+        .withArgs(ethers.ZeroAddress);
+    });
+
     it('should emit ConfigChange event', async () => {
       const { bounties, identity, custodian, finance } = await bountiesFixture();
 
@@ -864,6 +888,15 @@ describe("Bounties", () => {
       expect(await bounties.identityContract()).to.be.eq(issuer.address);
     });
 
+    it('should revert with invalid identity address', async () => {
+      const { bounties, custodian } = await bountiesFixture();
+
+      // when/then
+      await expect(bounties.connect(custodian).setIdentity(ethers.ZeroAddress))
+        .to.be.revertedWithCustomError(bounties, "InvalidAddress")
+        .withArgs(ethers.ZeroAddress);
+    });
+
     it('should emit ConfigChange event', async () => {
       const { bounties, custodian, notary, issuer } = await bountiesFixture();
 
@@ -900,7 +933,7 @@ describe("Bounties", () => {
     });
 
     it('should emit ConfigChange event', async () => {
-      const { bounties, identity, finance, custodian, notary } = await bountiesFixture();
+      const { bounties, identity, custodian, notary } = await bountiesFixture();
 
       // when
       expect(await bounties.connect(custodian).setServiceFee(50))
@@ -933,9 +966,9 @@ describe("Bounties", () => {
       const { bounties, custodian } = await bountiesFixture();
 
       // when/then
-      await expect(bounties.connect(custodian).setServiceFee(101)).to.be.revertedWith(
-        "Invalid fee"
-      );
+      await expect(bounties.connect(custodian).setServiceFee(101))
+        .to.be.revertedWithCustomError(bounties, "InvalidFee")
+        .withArgs(101);
     });
   });
 
@@ -977,9 +1010,9 @@ describe("Bounties", () => {
       const { bounties, custodian } = await bountiesFixture();
 
       // when/then
-      await expect(bounties.connect(custodian).setMaintainerFee(101)).to.be.revertedWith(
-        "Invalid fee"
-      );
+      await expect(bounties.connect(custodian).setMaintainerFee(101))
+        .to.be.revertedWithCustomError(bounties, "InvalidFee")
+        .withArgs(101);
     });
 
     // TODO: figure out how to test for a TypeError INVALID_ARGUMENT
@@ -987,9 +1020,9 @@ describe("Bounties", () => {
       const { bounties, custodian } = await bountiesFixture();
 
       // when/then
-      await expect(bounties.connect(custodian).setMaintainerFee(-1)).to.be.revertedWith(
-        "Invalid fee"
-      );
+      await expect(bounties.connect(custodian).setMaintainerFee(-1))
+        .to.be.revertedWithCustomError(bounties, "InvalidFee")
+        .withArgs(-1);
     });
   });
 
@@ -1036,7 +1069,7 @@ describe("Bounties", () => {
     });
 
     it('should emit TokenSupportChange event', async () => {
-      const { bounties, custodian, issuer, usdc } = await bountiesFixture();
+      const { bounties, custodian, issuer } = await bountiesFixture();
       const usdc2 = await usdcFixture(issuer);
       const usdc2Addr = await usdc2.getAddress();
 
@@ -1061,11 +1094,12 @@ describe("Bounties", () => {
 
     it('should revert when called with already supported token', async () => {
       const { bounties, custodian, usdc } = await bountiesFixture();
+      const usdcAddr = await usdc.getAddress();
 
       // when
-      await expect(bounties.connect(custodian).addToken(await usdc.getAddress())).to.be.revertedWith(
-        "Token already supported"
-      );
+      await expect(bounties.connect(custodian).addToken(usdcAddr))
+        .to.be.revertedWithCustomError(bounties, "TokenSupportError")
+        .withArgs(usdcAddr, true);
     });
   });
 
@@ -1101,7 +1135,7 @@ describe("Bounties", () => {
     });
 
     it('should emit TokenSupportChange event', async () => {
-      const { bounties, custodian, owner, usdc } = await bountiesFixture();
+      const { bounties, custodian, usdc } = await bountiesFixture();
       const usdcAddr = await usdc.getAddress();
 
       // when/then
@@ -1124,11 +1158,12 @@ describe("Bounties", () => {
     it('should revert when called with non-supported token', async () => {
       const { bounties, custodian, issuer } = await bountiesFixture();
       const usdc2 = await usdcFixture(issuer);
+      const usdc2Addr = await usdc2.getAddress();
 
       // when
-      await expect(bounties.connect(custodian).removeToken(await usdc2.getAddress())).to.be.revertedWith(
-        "Token not supported"
-      );
+      await expect(bounties.connect(custodian).removeToken(usdc2Addr))
+        .to.be.revertedWithCustomError(bounties, "TokenSupportError")
+        .withArgs(usdc2Addr, false);
     });
   });
 
@@ -1262,10 +1297,14 @@ describe("Bounties", () => {
 
     it('should revert if no bounty to sweep', async () => {
       const { bounties, finance, usdc } = await bountiesFixture();
+      const platformId = "1";
+      const repoId = "gitgig-io/ragnar";
+      const issueId = "123";
+      const usdcAddr = await usdc.getAddress();
 
-      await expect(bounties.connect(finance).sweepBounty("1", "gitgig-io/ragnar", "123", [await usdc.getAddress()])).to.be.revertedWith(
-        "No bounty to sweep"
-      );
+      await expect(bounties.connect(finance).sweepBounty("1", "gitgig-io/ragnar", "123", [usdcAddr]))
+        .to.be.revertedWithCustomError(bounties, "NoBounty")
+        .withArgs(platformId, repoId, issueId, [usdcAddr]);
     });
   });
 });

@@ -4,11 +4,9 @@ pragma solidity ^0.8.20;
 import {ERC721, ERC721Enumerable} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import {IERC721, IERC721Metadata} from "@openzeppelin/contracts/token/ERC721/extensions/IERC721Metadata.sol";
 import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
-import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
+import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
-import {Base64} from "@openzeppelin/contracts/utils/Base64.sol";
 import {AccessControlDefaultAdminRules} from "@openzeppelin/contracts/access/extensions/AccessControlDefaultAdminRules.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {IIdentity, PlatformUser} from "./IIdentity.sol";
@@ -18,30 +16,34 @@ contract Identity is
     IERC721Metadata,
     ERC721Enumerable,
     AccessControlDefaultAdminRules,
+    EIP712,
     Pausable
 {
     using Strings for uint256;
     using ECDSA for bytes32;
-    using MessageHashUtils for bytes32;
 
     event IdentityUpdate(
         uint256 tokenId,
         address wallet,
         string platform,
         string platformUserId,
-        string platformUsername
+        string platformUsername,
+        uint16 nonce
     );
 
     event ConfigChange(address notary, string baseUri);
 
-    error AlreadyMinted();
-    error InvalidAccount();
+    error AlreadyMinted(string platformId, string platformUserId);
+    error InvalidAddress(address addr);
+    error InvalidNonce(uint16 given, uint16 expected);
     error InvalidSignature();
     error NotSupported();
 
     bytes32 public constant CUSTODIAN_ADMIN_ROLE =
         keccak256("CUSTODIAN_ADMIN_ROLE");
     bytes32 public constant CUSTODIAN_ROLE = keccak256("CUSTODIAN_ROLE");
+
+    bytes32 private constant TYPE_HASH = keccak256("Identity(address userAddress,string platformId,string platformUserId,string platformUsername,uint16 nonce)");
 
     // start at 1 so we can tell the difference between a minted and non-minted
     // token for a user in the tokenIdForPlatformUser mapping
@@ -50,6 +52,8 @@ contract Identity is
     address public notary;
 
     string public baseUri;
+
+    mapping(string platformId => mapping(string platformUserId => uint16 lastNonce)) public lastNonceForPlatformUser;
 
     mapping(string platformId => mapping(string platformUserId => uint256 tokenId)) public tokenIdForPlatformUser;
 
@@ -60,6 +64,7 @@ contract Identity is
         address _notary,
         string memory _baseUri
     )
+        EIP712("GitGigIdentity", "1")
         ERC721("GitGigIdentity", "GGID")
         ERC721Enumerable()
         AccessControlDefaultAdminRules(3 days, msg.sender)
@@ -85,53 +90,71 @@ contract Identity is
             interfaceId == type(AccessControlDefaultAdminRules).interfaceId;
     }
 
-    function _validLinkSignature(
+    function _validateNonce(
+        string memory _platformId,
+        string memory _platformUserId,
+        uint16 _nonce
+    ) private {
+        uint16 _expectedNonce = lastNonceForPlatformUser[_platformId][_platformUserId] + 1;
+
+        if (_nonce != _expectedNonce) {
+          revert InvalidNonce(_nonce, _expectedNonce);
+        }
+
+        lastNonceForPlatformUser[_platformId][_platformUserId] = _nonce;
+    }
+
+    function _validateLinkSignature(
         address _userAddress,
         string memory _platformId,
         string memory _platformUserId,
         string memory _platformUsername,
+        uint16 _nonce,
         bytes memory _signature
     ) private view {
-        bytes memory _data = abi.encode(
-            _userAddress,
-            _platformId,
-            _platformUserId,
-            _platformUsername
+        bytes32 _digest = _hashTypedDataV4(
+          keccak256(
+            abi.encode(
+                TYPE_HASH,
+                _userAddress,
+                keccak256(bytes(_platformId)),
+                keccak256(bytes(_platformUserId)),
+                keccak256(bytes(_platformUsername)),
+                _nonce
+            )
+          )
         );
-        bytes32 _messageHash = keccak256(_data);
-        bytes32 _ethMessageHash = _messageHash.toEthSignedMessageHash();
 
-        bool _validSig = SignatureChecker.isValidSignatureNow(
-                notary,
-                _ethMessageHash,
-                _signature
-            );
+        address _signer = ECDSA.recover(_digest, _signature);
 
-        if (!_validSig) {
+        if (_signer != notary) {
             revert InvalidSignature();
         }
     }
-
-    // TODO: switch this to EIP-712 https://eips.ethereum.org/EIPS/eip-712#specification
 
     function mint(
         address _userAddress,
         string memory _platformId,
         string memory _platformUserId,
         string memory _platformUsername,
+        uint16 _nonce,
         bytes memory _signature
     ) public whenNotPaused {
-        _validLinkSignature(
+        // ensure token has not already been minted for this platform user
+        if (tokenIdForPlatformUser[_platformId][_platformUserId] != 0) {
+          revert AlreadyMinted(_platformId, _platformUserId);
+        }
+
+        _validateNonce(_platformId, _platformUserId, _nonce);
+
+        _validateLinkSignature(
             _userAddress,
             _platformId,
             _platformUserId,
             _platformUsername,
+            _nonce,
             _signature
         );
-        // ensure token has not already been minted for this platform user
-        if (tokenIdForPlatformUser[_platformId][_platformUserId] != 0) {
-          revert AlreadyMinted();
-        }
 
         uint256 _tokenId = nextTokenId++;
 
@@ -150,7 +173,8 @@ contract Identity is
             _userAddress,
             _platformId,
             _platformUserId,
-            _platformUsername
+            _platformUsername,
+            _nonce
         );
     }
 
@@ -159,13 +183,17 @@ contract Identity is
         string memory _platformId,
         string memory _platformUserId,
         string memory _platformUsername,
+        uint16 _nonce,
         bytes memory _signature
     ) public whenNotPaused {
-        _validLinkSignature(
+        _validateNonce(_platformId, _platformUserId, _nonce);
+
+        _validateLinkSignature(
             _userAddress,
             _platformId,
             _platformUserId,
             _platformUsername,
+            _nonce,
             _signature
         );
 
@@ -187,7 +215,8 @@ contract Identity is
             _userAddress,
             _platformId,
             _platformUserId,
-            _platformUsername
+            _platformUsername,
+            _nonce
         );
     }
 
@@ -224,7 +253,7 @@ contract Identity is
 
     function setNotary(address _newNotary) public onlyRole(CUSTODIAN_ROLE) {
         if (_newNotary == address(0)) {
-          revert InvalidAccount();
+          revert InvalidAddress(_newNotary);
         }
 
         notary = _newNotary;
