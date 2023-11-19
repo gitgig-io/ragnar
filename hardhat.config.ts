@@ -6,10 +6,11 @@ import env from "dotenv";
 env.config();
 
 const {
-  GOERLI_OWNER_KEY,
-  GOERLI_FINANCE_KEY,
-  GOERLI_SIGNER_KEY,
-  GOERLI_RPC_URL
+  ARB_SEPOLIA_RPC_URL,
+  ARB_SEPOLIA_OWNER_KEY,
+  ARB_SEPOLIA_CUSTODIAN_KEY,
+  ARB_SEPOLIA_FINANCE_KEY,
+  ARB_SEPOLIA_NOTARY_KEY,
 } = process.env;
 
 const config: HardhatUserConfig = {
@@ -23,12 +24,13 @@ const config: HardhatUserConfig = {
     }
   },
   networks: {
-    goerli: {
-      url: GOERLI_RPC_URL,
+    sepolia: {
+      url: ARB_SEPOLIA_RPC_URL!,
       accounts: [
-        GOERLI_OWNER_KEY!,
-        GOERLI_FINANCE_KEY!,
-        GOERLI_SIGNER_KEY!
+        ARB_SEPOLIA_OWNER_KEY!,
+        ARB_SEPOLIA_CUSTODIAN_KEY!,
+        ARB_SEPOLIA_FINANCE_KEY!,
+        ARB_SEPOLIA_NOTARY_KEY!
       ]
     },
     hardhat: {
