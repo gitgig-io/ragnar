@@ -10,7 +10,7 @@ const {
   ARB_SEPOLIA_OWNER_KEY,
   ARB_SEPOLIA_CUSTODIAN_KEY,
   ARB_SEPOLIA_FINANCE_KEY,
-  ARB_SEPOLIA_NOTARY_KEY,
+  ARB_SEPOLIA_NOTARY_KEY
 } = process.env;
 
 const config: HardhatUserConfig = {

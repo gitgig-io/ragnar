@@ -13,8 +13,8 @@ const { ISSUE_ID } = process.env;
 async function execute(issueId: string) {
   const [_owner, _custodian, finance, notary, issuer, maintainer, contributor] = await ethers.getSigners();
 
-  const TestUsdcFactory = await ethers.getContractFactory("TestUsdc");
-  const usdc = TestUsdcFactory.attach(USDC_ADDR);
+  const TestERC20Factory = await ethers.getContractFactory("TestERC20");
+  const usdc = TestERC20Factory.attach(USDC_ADDR);
 
   const IdentityFactory = await ethers.getContractFactory("Identity");
   const identity = IdentityFactory.attach(IDENTITY_ADDR);
@@ -55,8 +55,8 @@ async function execute(issueId: string) {
     console.log('maintainer already linked');
   } else {
     await rl.question("Next step: maintainer link identity. Press enter to continue");
-    const mintParams = [maintainer.address, platformId, maintainerUserId, maintainerUsername];
-    const mintSig = await mintSignature(mintParams, notary);
+    const mintParams = [maintainer.address, platformId, maintainerUserId, maintainerUsername, 1];
+    const mintSig = await mintSignature(identity, mintParams, notary);
     const { mint } = identity.connect(maintainer);
     await mint.apply(mint, [...mintParams, mintSig] as any);
   }
@@ -65,7 +65,7 @@ async function execute(issueId: string) {
 
   // maintainer claim
   const claimParams = [maintainerUserId, platformId, repoId, issueId, [contributorUserId]];
-  const claimSignature = await maintainerClaimSignature(claimParams, notary);
+  const claimSignature = await maintainerClaimSignature(bounties, claimParams, notary);
   const { maintainerClaim } = bounties.connect(maintainer);
   await maintainerClaim.apply(maintainerClaim, [...claimParams, claimSignature]);
 
@@ -74,8 +74,8 @@ async function execute(issueId: string) {
     console.log('contributor already linked');
   } else {
     await rl.question("Next step: contributor link identity. Press enter to continue");
-    const mintParams = [contributor.address, platformId, contributorUserId, contributorUsername];
-    const mintSig = await mintSignature(mintParams, notary);
+    const mintParams = [contributor.address, platformId, contributorUserId, contributorUsername, 1];
+    const mintSig = await mintSignature(identity, mintParams, notary);
     const { mint } = identity.connect(contributor);
     await mint.apply(mint, [...mintParams, mintSig] as any);
   }

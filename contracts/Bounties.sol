@@ -70,12 +70,7 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules {
     );
 
     // TODO: include the wallet that changed?
-    event TokenSupportChange(
-        bool supported,
-        address token,
-        string symbol,
-        uint8 decimals
-    );
+    event TokenSupportChange(bool supported, address token, string symbol, uint8 decimals);
 
     // TODO: include the wallet that changed?
     event ConfigChange(

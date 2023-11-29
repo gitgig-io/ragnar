@@ -75,6 +75,8 @@ contract Identity is
         _setRoleAdmin(CUSTODIAN_ROLE, CUSTODIAN_ADMIN_ROLE);
         _grantRole(CUSTODIAN_ADMIN_ROLE, _custodian);
         _grantRole(CUSTODIAN_ROLE, _custodian);
+        // TODO: add a test for this
+        emit ConfigChange(notary, baseUri);
     }
 
     function supportsInterface(bytes4 interfaceId)
