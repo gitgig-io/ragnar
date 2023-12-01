@@ -14,6 +14,11 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules {
     using ECDSA for bytes32;
     using MessageHashUtils for bytes32;
 
+    struct CustomFee {
+      uint8 fee;
+      bool enabled;
+    }
+
     // TODO: which fields should be indexed?
     event BountyCreate(
         string platform,
@@ -80,6 +85,8 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules {
         uint8 maintainerFee
     );
 
+    event CustomFeeChange(address wallet, string feeType, uint8 fee, bool enabled);
+
     error AlreadyClaimed(string platformId, string repoId, string issueId, address claimer);
     error IdentityNotFound(string platformId, string platformUserId);
     error InvalidAddress(address addr);
@@ -129,6 +136,8 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules {
 
     mapping(string platformId => mapping(string repoId => mapping(string issueId => mapping(address tokenContract => mapping(string platformUserId => bool)))))
         public claimed;
+
+    mapping(address => CustomFee) public customServiceFees;
 
     constructor(
         address _custodian,
@@ -252,6 +261,15 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules {
       return keccak256(bytes(a)) == keccak256(bytes(b));
     }
 
+    function effectiveServiceFee(address _wallet) public view returns (uint8) {
+      CustomFee memory _customFee = customServiceFees[_wallet]; 
+      if (_customFee.enabled) {
+        return _customFee.fee;
+      }
+
+      return serviceFee;
+    }
+
     function postBounty(
         string memory _platform,
         string memory _repoId,
@@ -265,7 +283,7 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules {
         supportedToken(_tokenContract)
     {
         // capture fee
-        uint256 _fee = (_amount * serviceFee) / 100;
+        uint256 _fee = (_amount * effectiveServiceFee(msg.sender)) / 100;
         fees[_tokenContract] += _fee;
 
         // record the number of tokens in the contract allocated to this issue
@@ -652,6 +670,20 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules {
         _validateFee(_newServiceFee);
         serviceFee = _newServiceFee;
         emitConfigChange();
+    }
+
+    function setCustomServiceFee(address _wallet, uint8 _newServiceFee)
+        public
+        onlyRole(CUSTODIAN_ROLE)
+    {
+        _validateFee(_newServiceFee);
+        if (_newServiceFee == serviceFee) {
+          delete customServiceFees[_wallet];
+          emit CustomFeeChange(_wallet, "service", _newServiceFee, false);
+        } else {
+          customServiceFees[_wallet] = CustomFee(_newServiceFee, true);
+          emit CustomFeeChange(_wallet, "service", _newServiceFee, true);
+        }
     }
 
     function setMaintainerFee(uint8 _newMaintainerFee)
