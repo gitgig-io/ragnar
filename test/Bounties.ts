@@ -1022,8 +1022,8 @@ describe("Bounties", () => {
       expect(await bounties.effectiveServiceFee(issuer.address)).to.be.eq(3);
     });
 
-    it('should emit CustomFeeChange event', async () => {
-      const { bounties, identity, custodian, issuer } = await bountiesFixture();
+    it('should emit CustomFeeChange event when enabled', async () => {
+      const { bounties, custodian, issuer } = await bountiesFixture();
 
       // when
       expect(await bounties.connect(custodian).setCustomServiceFee(issuer.address, 3))
@@ -1033,6 +1033,21 @@ describe("Bounties", () => {
           "service",
           3,
           true
+        );
+    });
+
+    it('should emit CustomFeeChange event when disabled', async () => {
+      const { bounties, custodian, issuer } = await bountiesFixture();
+
+      // when
+      await bounties.connect(custodian).setCustomServiceFee(issuer.address, 3);
+      expect(await bounties.connect(custodian).setCustomServiceFee(issuer.address, 20))
+        .to.emit(bounties, "CustomFeeChange")
+        .withArgs(
+          issuer.address,
+          "service",
+          20,
+          false
         );
     });
 
