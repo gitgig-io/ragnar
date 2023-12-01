@@ -230,6 +230,44 @@ describe("Bounties", () => {
         fee
       )
     });
+
+    it("should respect custom service fees", async () => {
+      const { bounties, custodian, issuer, usdc } = await bountiesFixture();
+      await bounties.connect(custodian).setCustomServiceFee(issuer.address, 10);
+      const amount = ethers.toBigInt(5);
+      const customServiceFee = await bounties.effectiveServiceFee(issuer.address);
+      const expectedFee = amount * customServiceFee / ethers.toBigInt(100);
+      const serviceFee = await bounties.serviceFee();
+      expect(serviceFee).to.not.be.eq(customServiceFee);
+
+      // when
+      await usdc.connect(issuer).approve(await bounties.getAddress(), amount);
+      await bounties.connect(issuer).postBounty("1", "gitgig-io/ragnar", "123", await usdc.getAddress(), amount);
+
+      // then
+      // ensure the smart contract has the tokens now
+      expect(await usdc.balanceOf(await bounties.getAddress())).to.be.eq(amount);
+      expect(await bounties.fees(await usdc.getAddress())).to.be.eq(expectedFee);
+    });
+
+    it("should not respect custom service fees for other users", async () => {
+      const { bounties, custodian, notary, issuer, usdc } = await bountiesFixture();
+      await bounties.connect(custodian).setCustomServiceFee(notary.address, 10);
+      const amount = ethers.toBigInt(5);
+      const customServiceFee = await bounties.effectiveServiceFee(issuer.address);
+      const expectedFee = amount * customServiceFee / ethers.toBigInt(100);
+      const serviceFee = await bounties.serviceFee();
+      expect(serviceFee).to.be.eq(customServiceFee);
+
+      // when
+      await usdc.connect(issuer).approve(await bounties.getAddress(), amount);
+      await bounties.connect(issuer).postBounty("1", "gitgig-io/ragnar", "123", await usdc.getAddress(), amount);
+
+      // then
+      // ensure the smart contract has the tokens now
+      expect(await usdc.balanceOf(await bounties.getAddress())).to.be.eq(amount);
+      expect(await bounties.fees(await usdc.getAddress())).to.be.eq(expectedFee);
+    });
   });
 
   describe("MaintainerClaim", () => {
@@ -969,6 +1007,77 @@ describe("Bounties", () => {
       await expect(bounties.connect(custodian).setServiceFee(101))
         .to.be.revertedWithCustomError(bounties, "InvalidFee")
         .withArgs(101);
+    });
+  });
+
+  describe("SetCustomServiceFee", () => {
+    it('should update service fee', async () => {
+      const { bounties, custodian, issuer } = await bountiesFixture();
+
+      // when
+      const txn = await bounties.connect(custodian).setCustomServiceFee(issuer.address, 3);
+
+      // then
+      expect(txn.hash).to.be.a.string;
+      expect(await bounties.effectiveServiceFee(issuer.address)).to.be.eq(3);
+    });
+
+    it('should emit CustomFeeChange event', async () => {
+      const { bounties, identity, custodian, issuer } = await bountiesFixture();
+
+      // when
+      expect(await bounties.connect(custodian).setCustomServiceFee(issuer.address, 3))
+        .to.emit(bounties, "CustomFeeChange")
+        .withArgs(
+          issuer.address,
+          "service",
+          3,
+          true
+        );
+    });
+
+    it('should not allow non-custodian to update service fee', async () => {
+      const { bounties, finance, issuer } = await bountiesFixture();
+
+      // when/then
+      await expect(bounties.connect(finance).setCustomServiceFee(issuer.address, 3))
+        .to.be.revertedWithCustomError(bounties, "AccessControlUnauthorizedAccount");
+    });
+
+    // TODO: figure out how to check for a TypeError
+    it.skip('should not allow service fee below zero', async () => {
+      const { bounties, custodian, issuer } = await bountiesFixture();
+
+      // when/then
+      expect(() => bounties.connect(custodian).setCustomServiceFee(issuer.address, -1)).to.throw();
+    });
+
+    it('should not allow service fee over 100', async () => {
+      const { bounties, custodian, issuer } = await bountiesFixture();
+
+      // when/then
+      await expect(bounties.connect(custodian).setCustomServiceFee(issuer.address, 101))
+        .to.be.revertedWithCustomError(bounties, "InvalidFee")
+        .withArgs(101);
+    });
+  });
+
+  describe("EffectiveServiceFee", () => {
+    it('should return the default service fee when no custom fee set', async () => {
+      const { bounties, issuer } = await bountiesFixture();
+      expect(await bounties.effectiveServiceFee(issuer.address)).to.be.eq(20);
+    });
+
+    it('should return the custom service fee when set', async () => {
+      const { bounties, custodian, issuer } = await bountiesFixture();
+      await bounties.connect(custodian).setCustomServiceFee(issuer.address, 3);
+      expect(await bounties.effectiveServiceFee(issuer.address)).to.be.eq(3);
+    });
+
+    it('should return the default service fee when custom fee set for other wallet', async () => {
+      const { bounties, custodian, issuer } = await bountiesFixture();
+      await bounties.connect(custodian).setCustomServiceFee(custodian.address, 3);
+      expect(await bounties.effectiveServiceFee(issuer.address)).to.be.eq(20);
     });
   });
 
