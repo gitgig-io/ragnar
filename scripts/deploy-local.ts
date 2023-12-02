@@ -58,6 +58,9 @@ async function main() {
   const bountiesAddr = await bounties.getAddress();
   console.log(`Bounties: ${bountiesAddr}`);
 
+  // set a custom fee for the issuer
+  await bounties.connect(custodian).setCustomServiceFee(issuer.address, 10);
+
   // write out addresses to a file
   const addresses = {
     bounties: bountiesAddr,
