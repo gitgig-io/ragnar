@@ -45,9 +45,16 @@ async function execute(issueId: string) {
   await rl.question("Next step: create bounty. Press enter to continue");
 
   // post bounty
-  const amount = 50000000000;
+  const smallAmount = 500000000;
+  const bigAmount = 500000000000000000000n;
 
-  for (const token of [arb, usdc, weth]) {
+  const tokenAmounts = [
+    { token: usdc, amount: smallAmount },
+    { token: arb, amount: bigAmount },
+    { token: weth, amount: bigAmount },
+  ]
+
+  for (const { token, amount } of tokenAmounts) {
     await token.connect(issuer).approve(await bounties.getAddress(), amount);
     const tx = await bounties.connect(issuer).postBounty(platformId, repoId, issueId, await token.getAddress(), amount);
     console.log(tx.hash);
