@@ -1,7 +1,9 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import { ethers, network } from "hardhat";
 import { mintSignature } from "./helpers/signatureHelpers";
 import { Identity } from "../typechain-types";
+// import * as Web3 from 'web3';
+import { ERC721Validator } from '@nibbstack/erc721-validator';
 
 describe("Identity", () => {
   async function identityFixture() {
@@ -592,6 +594,87 @@ describe("Identity", () => {
           ethers.Typed.uint256(tokenId),
           ethers.Typed.bytes(bytes))
       ).to.be.revertedWithCustomError(identity, "NotSupported");
+    });
+  });
+
+  describe("TotalSupply", () => {
+    it('should return zero when none minted', async () => {
+      const { identity } = await identityFixture();
+      expect(await identity.totalSupply()).to.equal(0);
+    });
+
+    it('should return total supply of minted', async () => {
+      const { identity, notary, user2 } = await signAndMintFixture();
+      expect(await identity.totalSupply()).to.equal(1);
+
+      // mint another and ensure supply is correct
+      const mintParams = [user2.address, "1", "234", "coder2", 1];
+      const signature = await mintSignature(identity, mintParams, notary);
+      await applyMint(identity, mintParams, signature);
+      expect(await identity.totalSupply()).to.equal(2);
+    });
+
+    it('should return same total supply after transfer', async () => {
+      const { identity, notary, transferParams: params } = await signAndMintFixture();
+      expect(await identity.totalSupply()).to.equal(1);
+
+      // mint another and ensure supply is correct
+      const signature = await mintSignature(identity, params, notary);
+      await applyTransfer(identity, params, signature);
+      expect(await identity.totalSupply()).to.equal(1);
+    });
+  });
+
+  describe("TokenByIndex", () => {
+    it('should return custom error for index out of bounds', async () => {
+      const { identity } = await identityFixture();
+      await expect(identity.tokenByIndex(0))
+        .to.be.revertedWithCustomError(identity, 'ERC721OutOfBoundsIndex');
+    });
+
+    it('should return token by index', async () => {
+      const { identity, notary, user2 } = await signAndMintFixture();
+      expect(await identity.tokenByIndex(0)).to.equal(1);
+
+      const mintParams = [user2.address, "1", "234", "coder2", 1];
+      const signature = await mintSignature(identity, mintParams, notary);
+      await applyMint(identity, mintParams, signature);
+      expect(await identity.tokenByIndex(1)).to.equal(2);
+    });
+  })
+
+  describe("TokenOfOwnerByIndex", () => {
+    it('should return token id', async () => {
+      const { identity, notary, user, user2 } = await signAndMintFixture();
+
+      const mintParams = [user2.address, "1", "234", "coder2", 1];
+      const signature = await mintSignature(identity, mintParams, notary);
+      await applyMint(identity, mintParams, signature);
+
+      expect(await identity.tokenOfOwnerByIndex(user.address, 0)).to.equal(1);
+      expect(await identity.tokenOfOwnerByIndex(user2.address, 0)).to.equal(2);
+    });
+
+    it('should return custom error for index out of bounds', async () => {
+      const { identity, user } = await signAndMintFixture();
+      await expect(identity.tokenOfOwnerByIndex(user.address, 1))
+        .to.be.revertedWithCustomError(identity, 'ERC721OutOfBoundsIndex');
+    });
+  });
+
+  describe("ERC721 Validation", () => {
+    it('should validate', async () => {
+      const { identity, user } = await signAndMintFixture();
+
+      const validator = new ERC721Validator(web3, user.address);
+      const contract = await identity.getAddress();
+      const token = '1';
+
+      const res1 = await validator.basic(1, contract);
+      const res2 = await validator.token(2, contract, token);
+
+      expect(res1.result).to.be.true;
+      expect(res2.result).to.be.true;
     });
   });
 });
