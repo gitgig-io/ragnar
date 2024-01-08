@@ -7,6 +7,7 @@ import env from "dotenv";
 env.config();
 
 const {
+  ARB_GOERLI_RPC_URL,
   ARB_SEPOLIA_RPC_URL,
   ARB_SEPOLIA_OWNER_KEY,
   ARB_SEPOLIA_CUSTODIAN_KEY,
@@ -25,6 +26,15 @@ const config: HardhatUserConfig = {
     }
   },
   networks: {
+    goerli: {
+      url: ARB_GOERLI_RPC_URL!,
+      accounts: [
+        ARB_SEPOLIA_OWNER_KEY!,
+        ARB_SEPOLIA_CUSTODIAN_KEY!,
+        ARB_SEPOLIA_FINANCE_KEY!,
+        ARB_SEPOLIA_NOTARY_KEY!
+      ]
+    },
     sepolia: {
       url: ARB_SEPOLIA_RPC_URL!,
       accounts: [
