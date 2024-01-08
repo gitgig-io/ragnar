@@ -288,6 +288,14 @@ contract Identity is
       revert NotSupported();
     }
 
+    function totalSupply() override(ERC721Enumerable) public view returns (uint256) {
+      return super.totalSupply();
+    }
+
+    function tokenByIndex(uint256 index) override(ERC721Enumerable) public view returns (uint256) {
+      return super.tokenByIndex(index);
+    }
+
     /** END NFT transfer overrides **/
 
     function tokenOfOwnerByIndex(address addr, uint256 index) override(ERC721Enumerable,IIdentity) public view returns (uint256) {
