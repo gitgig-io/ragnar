@@ -1,16 +1,6 @@
-# Sample Hardhat Project
+# Ragnar
 
-This project demonstrates a basic Hardhat use case. It comes with a sample contract, a test for that contract, and a script that deploys that contract.
-
-Try running some of the following tasks:
-
-```shell
-npx hardhat help
-npx hardhat test
-REPORT_GAS=true npx hardhat test
-npx hardhat node
-npx hardhat run scripts/deploy-local.ts
-```
+Smart Contracts for GitGig
 
 ## Development
 
@@ -27,4 +17,3 @@ In another terminal, deploy the contracts
 ```bash
 npm run deploy:local
 ```
-
