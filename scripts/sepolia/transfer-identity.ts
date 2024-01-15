@@ -7,7 +7,7 @@ async function main() {
   const identityFactory = await ethers.getContractFactory("Identity");
   const identity = await identityFactory.attach("0x63e38e25aC8f8fd1D986D9b112973c38dEE87E68");
 
-  const params = [owner.address, "1", "1", "coder3", 1];
+  const params = [custodian.address, "1", "1", "coder3", 2];
 
   const domain: TypedDataDomain = {
     name: "GitGigIdentity",
@@ -36,7 +36,7 @@ async function main() {
 
   const signature = await notary.signTypedData(domain, types, values);
 
-  const tx = await identity.connect(owner).mint(
+  const tx = await identity.connect(owner).transfer(
     params[0] as string,
     params[1] as string,
     params[2] as string,

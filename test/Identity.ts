@@ -672,4 +672,21 @@ describe("Identity", () => {
       expect(res2.result).to.be.true;
     });
   });
+
+  describe("SupportsInterface", () => {
+    it("should support IERC721", async () => {
+      const { identity } = await identityFixture();
+      expect(await identity.supportsInterface("0x80ac58cd")).to.be.true;
+    });
+
+    it("should support IERC721Enumerable", async () => {
+      const { identity } = await identityFixture();
+      expect(await identity.supportsInterface("0x780e9d63")).to.be.true;
+    });
+
+    it("should support IERC721Metadata", async () => {
+      const { identity } = await identityFixture();
+      expect(await identity.supportsInterface("0x5b5e139f")).to.be.true;
+    });
+  });
 });

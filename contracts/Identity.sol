@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.20;
 
-import {ERC721, ERC721Enumerable} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
+import {ERC721, ERC721Enumerable, IERC721Enumerable} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import {IERC721, IERC721Metadata} from "@openzeppelin/contracts/token/ERC721/extensions/IERC721Metadata.sol";
 import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
@@ -13,6 +13,7 @@ import {IIdentity, PlatformUser} from "./IIdentity.sol";
 
 contract Identity is
     IIdentity,
+    IERC721,
     IERC721Metadata,
     ERC721Enumerable,
     AccessControlDefaultAdminRules,
@@ -87,8 +88,9 @@ contract Identity is
     {
         return
             interfaceId == type(IERC165).interfaceId ||
-            interfaceId == type(ERC721).interfaceId ||
-            interfaceId == type(ERC721Enumerable).interfaceId ||
+            interfaceId == type(IERC721Metadata).interfaceId ||
+            interfaceId == type(IERC721).interfaceId ||
+            interfaceId == type(IERC721Enumerable).interfaceId ||
             interfaceId == type(AccessControlDefaultAdminRules).interfaceId;
     }
 
