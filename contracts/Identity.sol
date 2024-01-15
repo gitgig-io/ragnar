@@ -272,19 +272,19 @@ contract Identity is
 
     /** BEGIN NFT transfer overrides **/
 
-    function approve(address, uint256) override(ERC721,IERC721) public pure {
+    function approve(address to, uint256 tokenId) override(ERC721,IERC721) public pure {
       revert NotSupported();
     }
 
-    function setApprovalForAll(address, bool) override(ERC721,IERC721) public pure {
+    function setApprovalForAll(address operator, bool approved) override(ERC721,IERC721) public pure {
       revert NotSupported();
     }
 
-    function transferFrom(address, address, uint256) override(ERC721,IERC721) public pure {
+    function transferFrom(address from, address to, uint256 tokenId) override(ERC721,IERC721) public pure {
       revert NotSupported();
     }
 
-    function safeTransferFrom(address, address, uint256, bytes memory) override(ERC721,IERC721) public pure {
+    function safeTransferFrom(address from, address to, uint256 tokenId, bytes memory data) override(ERC721,IERC721) public pure {
       revert NotSupported();
     }
 
@@ -302,8 +302,8 @@ contract Identity is
       return super.tokenOfOwnerByIndex(addr, index);
     }
 
-    function balanceOf(address addr) override(ERC721,IERC721, IIdentity) public view returns (uint256) {
-      return super.balanceOf(addr);
+    function balanceOf(address owner) override(ERC721,IERC721, IIdentity) public view returns (uint256) {
+      return super.balanceOf(owner);
     }
 
     function platformUser(uint256 tokenId) override(IIdentity) public view returns (PlatformUser memory) {

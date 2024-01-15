@@ -8,9 +8,10 @@ import { ERC721Validator } from '@nibbstack/erc721-validator';
 describe("Identity", () => {
   async function identityFixture() {
     const [owner, custodian, notary, user, user2] = await ethers.getSigners();
+    const baseUri = "http://localhost:4000";
     const IdentityFactory = await ethers.getContractFactory("Identity");
-    const identity = await IdentityFactory.deploy(custodian.address, notary.address, "http://localhost:4000");
-    return { identity, custodian, notary, owner, user, user2 };
+    const identity = await IdentityFactory.deploy(custodian.address, notary.address, baseUri);
+    return { identity, custodian, notary, owner, user, user2, baseUri };
   }
 
   async function applyMint(identity: Identity, params: any[], signature: Uint8Array | string) {
@@ -99,9 +100,21 @@ describe("Identity", () => {
       const signature = await mintSignature(identity, params, notary);
 
       // when/then
-      expect(await identity.mint(user.address, "1", "123", "coder1", 1, signature))
+      await expect(identity.mint(user.address, "1", "123", "coder1", 1, signature))
         .to.emit(identity, "IdentityUpdate")
-        .withArgs([1, ...params]);
+        .withArgs(...[1, ...params]);
+    });
+
+    it("should emit a Transfer event", async () => {
+      // given
+      const { identity, notary, user } = await identityFixture();
+      const params = [user.address, "1", "123", "coder1", 1];
+      const signature = await mintSignature(identity, params, notary);
+
+      // when/then
+      await expect(identity.mint(user.address, "1", "123", "coder1", 1, signature))
+        .to.emit(identity, "Transfer")
+        .withArgs(ethers.ZeroAddress, user.address, 1);
     });
 
     it("should set platformUserForTokenId", async () => {
@@ -166,36 +179,6 @@ describe("Identity", () => {
         .to.be.revertedWithCustomError(identity, "AlreadyMinted")
         .withArgs(platformId, platformUserId);
     });
-
-    // TODO: add tests for nft attributes
-
-    // it.only("fake test for printout out the wallet signed message", async () => {
-    //   const { notary, user } = await identityFixture();
-
-    //   const params = [user.address, "1", "123456", "bob"];
-    //   const signature = await mintSignature(identity, params, notary);
-    //   // const msg = ethers.toUtf8Bytes("GitGig Wallet Link: 123456")
-    //   // const hash = ethers.keccak256(msg);
-    //   // // without this conversion the number of bytes will be 64 instead of 32 which is wrong.
-    //   // const hashBytes = ethers.toBeArray(hash);
-    //   // const signature = await user.signMessage(hashBytes);
-    //   console.log('mint signature: ', signature);
-    // });
-
-    // it("fake test for printing out the user signed message signature", async () => {
-    //   const { notary, user } = await identityFixture();
-    //   const msg = ethers.toUtf8Bytes("GitGig Wallet Link: 123456")
-    //   const hash = ethers.keccak256(msg);
-    //   console.log('hash: ', hash);
-
-    //   const ethHash = ethers.hashMessage(hash);
-    //   console.log('ethHash: ', ethHash);
-
-    //   // without this conversion the number of bytes will be 64 instead of 32 which is wrong.
-    //   const hashBytes = ethers.toBeArray(hash);
-    //   const signature = await user.signMessage(hashBytes);
-    //   console.log('wallet signature: ', signature);
-    // });
   });
 
   describe("Transfer", () => {
@@ -275,9 +258,22 @@ describe("Identity", () => {
       const signature = await mintSignature(identity, params, notary);
 
       // when/then
-      expect(await applyTransfer(identity, params, signature))
+      await expect(applyTransfer(identity, params, signature))
         .to.emit(identity, "IdentityUpdate")
-        .withArgs([tokenId, ...params]);
+        .withArgs(...[tokenId, ...params]);
+    });
+
+    it("should emit a Transfer event", async () => {
+      // given
+      const { identity, notary, user, user2, transferParams: params } = await signAndMintFixture();
+      params[0] = user2.address;
+      const tokenId = await identity.tokenOfOwnerByIndex(user.address, 0);
+      const signature = await mintSignature(identity, params, notary);
+
+      // when/then
+      await expect(applyTransfer(identity, params, signature))
+        .to.emit(identity, "Transfer")
+        .withArgs(user.address, user2.address, tokenId);
     });
 
     it("fails to transfer identity NFT with invalid signature", async () => {
@@ -377,12 +373,12 @@ describe("Identity", () => {
     });
 
     it('should emit ConfigChange event', async () => {
-      const { identity, custodian, user } = await identityFixture();
+      const { identity, custodian, user, baseUri } = await identityFixture();
 
       // when
-      expect(await identity.connect(custodian).setNotary(user.address))
+      await expect(identity.connect(custodian).setNotary(user.address))
         .to.emit(identity, "ConfigChange")
-        .withArgs(user.address);
+        .withArgs(user.address, baseUri);
     });
 
     it('should not allow non-custodian to update notary', async () => {
@@ -420,8 +416,7 @@ describe("Identity", () => {
       const { identity, custodian, notary } = await identityFixture();
 
       // when
-      expect(await identity.connect(custodian)
-        .setBaseUri("http://localhost:9000"))
+      await expect(identity.connect(custodian).setBaseUri("http://localhost:9000"))
         .to.emit(identity, "ConfigChange")
         .withArgs(notary.address, "http://localhost:9000");
     });

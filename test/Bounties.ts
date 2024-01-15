@@ -218,17 +218,19 @@ describe("Bounties", () => {
 
       const fee = await serviceFee(bounties, amount);
       await usdc.connect(issuer).approve(await bounties.getAddress(), amount);
-      await expect(bounties.connect(issuer).postBounty("1", "gitgig-io/ragnar", "123", await usdc.getAddress(), amount)).to.emit(bounties, "BountyCreate").withArgs(
-        "1",
-        "gitgig-io/ragnar",
-        "123",
-        await issuer.getAddress(),
-        await usdc.getAddress(),
-        "USDC",
-        6,
-        amount - fee,
-        fee
-      )
+      await expect(bounties.connect(issuer).postBounty("1", "gitgig-io/ragnar", "123", await usdc.getAddress(), amount))
+        .to.emit(bounties, "BountyCreate")
+        .withArgs(
+          "1",
+          "gitgig-io/ragnar",
+          "123",
+          await issuer.getAddress(),
+          await usdc.getAddress(),
+          "USDC",
+          6,
+          amount - fee,
+          fee
+        )
     });
 
     it("should respect custom service fees", async () => {
@@ -351,17 +353,19 @@ describe("Bounties", () => {
       const expectedAmount = await maintainerFee(bounties, amount);
 
       // when
-      await expect(executeMaintainerClaim()).to.emit(bounties, "BountyClaim").withArgs(
-        platformId,
-        repoId,
-        issueId,
-        await maintainer.getAddress(),
-        "maintainer",
-        await usdc.getAddress(),
-        await usdc.symbol(),
-        await usdc.decimals(),
-        expectedAmount,
-      );
+      await expect(executeMaintainerClaim())
+        .to.emit(bounties, "BountyClaim")
+        .withArgs(
+          platformId,
+          repoId,
+          issueId,
+          await maintainer.getAddress(),
+          "maintainer",
+          await usdc.getAddress(),
+          await usdc.symbol(),
+          await usdc.decimals(),
+          expectedAmount,
+        );
     });
 
     it("should revert if issue is already closed", async () => {
@@ -374,16 +378,18 @@ describe("Bounties", () => {
 
     it("should emit issue closed event", async () => {
       const { bounties, contributorUserIds, executeMaintainerClaim, platformId, repoId, issueId, maintainer, maintainerUserId } = await claimableLinkedBountyFixture();
-      await expect(executeMaintainerClaim()).to.emit(bounties, "IssueTransition").withArgs(
-        platformId,
-        repoId,
-        issueId,
-        "closed",
-        "open",
-        maintainerUserId,
-        await maintainer.getAddress(),
-        contributorUserIds
-      );
+      await expect(executeMaintainerClaim())
+        .to.emit(bounties, "IssueTransition")
+        .withArgs(
+          platformId,
+          repoId,
+          issueId,
+          "closed",
+          "open",
+          maintainerUserId,
+          await maintainer.getAddress(),
+          contributorUserIds
+        );
     });
 
     it("should revert if maintainer has not linked identity", async () => {
@@ -542,17 +548,19 @@ describe("Bounties", () => {
 
       // when/then
       const expectedAmount = await bountyAmountAfterFees(bounties, amount);
-      await expect(bounties.connect(contributor).contributorClaim(platformId, repoId, issueId)).to.emit(bounties, "BountyClaim").withArgs(
-        platformId,
-        repoId,
-        issueId,
-        await contributor.getAddress(),
-        "contributor",
-        await usdc.getAddress(),
-        await usdc.symbol(),
-        await usdc.decimals(),
-        expectedAmount,
-      );
+      await expect(bounties.connect(contributor).contributorClaim(platformId, repoId, issueId))
+        .to.emit(bounties, "BountyClaim")
+        .withArgs(
+          platformId,
+          repoId,
+          issueId,
+          await contributor.getAddress(),
+          "contributor",
+          await usdc.getAddress(),
+          await usdc.symbol(),
+          await usdc.decimals(),
+          expectedAmount,
+        );
     });
 
     it("should claim expected amount with two resolvers", async () => {
@@ -760,18 +768,21 @@ describe("Bounties", () => {
       const expectedFee = await serviceFee(bounties, amount);
 
       // when / then
-      await expect(bounties.connect(finance).withdrawFees()).to.emit(bounties, "FeeWithdraw").withArgs(
-        await usdc.getAddress(),
-        await usdc.symbol(),
-        await usdc.decimals(),
-        finance.address,
-        expectedFee
-      );
+      await expect(bounties.connect(finance).withdrawFees())
+        .to.emit(bounties, "FeeWithdraw")
+        .withArgs(
+          await usdc.getAddress(),
+          await usdc.symbol(),
+          await usdc.decimals(),
+          finance.address,
+          expectedFee
+        );
     });
 
     it('should not emit FeeWithdraw event when no fees', async () => {
       const { bounties, finance } = await claimableLinkedBountyFixture();
-      await expect(bounties.connect(finance).withdrawFees()).to.not.emit(bounties, "FeeWithdraw");
+      await expect(bounties.connect(finance).withdrawFees())
+        .to.not.emit(bounties, "FeeWithdraw");
     });
   });
 
@@ -860,7 +871,7 @@ describe("Bounties", () => {
       const { bounties, identity, custodian, finance } = await bountiesFixture();
 
       // when
-      expect(await bounties.connect(custodian).setNotary(finance.address))
+      await expect(bounties.connect(custodian).setNotary(finance.address))
         .to.emit(bounties, "ConfigChange")
         .withArgs(
           await finance.getAddress(),
@@ -939,7 +950,7 @@ describe("Bounties", () => {
       const { bounties, custodian, notary, issuer } = await bountiesFixture();
 
       // when
-      expect(await bounties.connect(custodian).setIdentity(issuer.address))
+      await expect(bounties.connect(custodian).setIdentity(issuer.address))
         .to.emit(bounties, "ConfigChange")
         .withArgs(
           await notary.getAddress(),
@@ -974,7 +985,7 @@ describe("Bounties", () => {
       const { bounties, identity, custodian, notary } = await bountiesFixture();
 
       // when
-      expect(await bounties.connect(custodian).setServiceFee(50))
+      await expect(bounties.connect(custodian).setServiceFee(50))
         .to.emit(bounties, "ConfigChange")
         .withArgs(
           await notary.getAddress(),
@@ -1026,7 +1037,7 @@ describe("Bounties", () => {
       const { bounties, custodian, issuer } = await bountiesFixture();
 
       // when
-      expect(await bounties.connect(custodian).setCustomServiceFee(issuer.address, 3))
+      await expect(bounties.connect(custodian).setCustomServiceFee(issuer.address, 3))
         .to.emit(bounties, "CustomFeeChange")
         .withArgs(
           issuer.address,
@@ -1041,7 +1052,7 @@ describe("Bounties", () => {
 
       // when
       await bounties.connect(custodian).setCustomServiceFee(issuer.address, 3);
-      expect(await bounties.connect(custodian).setCustomServiceFee(issuer.address, 20))
+      await expect(bounties.connect(custodian).setCustomServiceFee(issuer.address, 20))
         .to.emit(bounties, "CustomFeeChange")
         .withArgs(
           issuer.address,
@@ -1112,7 +1123,7 @@ describe("Bounties", () => {
       const { bounties, identity, custodian, notary } = await bountiesFixture();
 
       // when
-      expect(await bounties.connect(custodian).setServiceFee(50))
+      await expect(bounties.connect(custodian).setMaintainerFee(50))
         .to.emit(bounties, "ConfigChange")
         .withArgs(
           await notary.getAddress(),
@@ -1407,7 +1418,9 @@ describe("Bounties", () => {
       const { bounties, finance, usdc, bountyAmount, platformId, repoId, issueId, supportedTokens } = await sweepableBountyFixture();
 
       // when/then
-      expect(bounties.connect(finance).sweepBounty(platformId, repoId, issueId, supportedTokens)).to.emit(bounties, "BountySweep").withArgs(finance.address, "1", "gitgig-io/ragnar", "123", await usdc.getAddress(), "USDC", 6, bountyAmount);
+      await expect(bounties.connect(finance).sweepBounty(platformId, repoId, issueId, supportedTokens))
+        .to.emit(bounties, "BountySweep")
+        .withArgs(finance.address, "1", "gitgig-io/ragnar", "123", await usdc.getAddress(), "USDC", 6, bountyAmount);
     });
 
 

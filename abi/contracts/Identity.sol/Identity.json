@@ -674,12 +674,12 @@
     "inputs": [
       {
         "internalType": "address",
-        "name": "",
+        "name": "to",
         "type": "address"
       },
       {
         "internalType": "uint256",
-        "name": "",
+        "name": "tokenId",
         "type": "uint256"
       }
     ],
@@ -692,7 +692,7 @@
     "inputs": [
       {
         "internalType": "address",
-        "name": "addr",
+        "name": "owner",
         "type": "address"
       }
     ],
@@ -1245,22 +1245,22 @@
     "inputs": [
       {
         "internalType": "address",
-        "name": "",
+        "name": "from",
         "type": "address"
       },
       {
         "internalType": "address",
-        "name": "",
+        "name": "to",
         "type": "address"
       },
       {
         "internalType": "uint256",
-        "name": "",
+        "name": "tokenId",
         "type": "uint256"
       },
       {
         "internalType": "bytes",
-        "name": "",
+        "name": "data",
         "type": "bytes"
       }
     ],
@@ -1273,12 +1273,12 @@
     "inputs": [
       {
         "internalType": "address",
-        "name": "",
+        "name": "operator",
         "type": "address"
       },
       {
         "internalType": "bool",
-        "name": "",
+        "name": "approved",
         "type": "bool"
       }
     ],
@@ -1486,17 +1486,17 @@
     "inputs": [
       {
         "internalType": "address",
-        "name": "",
+        "name": "from",
         "type": "address"
       },
       {
         "internalType": "address",
-        "name": "",
+        "name": "to",
         "type": "address"
       },
       {
         "internalType": "uint256",
-        "name": "",
+        "name": "tokenId",
         "type": "uint256"
       }
     ],
