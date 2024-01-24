@@ -9,6 +9,8 @@ import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {AccessControlDefaultAdminRules} from "@openzeppelin/contracts/access/extensions/AccessControlDefaultAdminRules.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {IIdentity, PlatformUser} from "./IIdentity.sol";
+import {GeneratedERC20} from "./GeneratedERC20.sol";
+import {LibBounties} from "./LibBounties.sol";
 
 contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules {
     using ECDSA for bytes32;
@@ -89,8 +91,6 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules {
 
     error AlreadyClaimed(string platformId, string repoId, string issueId, address claimer);
     error IdentityNotFound(string platformId, string platformUserId);
-    error InvalidAddress(address addr);
-    error InvalidFee(uint8 fee);
     error InvalidResolver(string platformId, string repoId, string issueId, address claimer);
     error InvalidSignature();
     error IssueClosed(string platformId, string repoId, string issueId);
@@ -198,51 +198,14 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules {
         string memory _repoId,
         string memory _issueId
     ) {
-        uint256 _identitiesLength = IIdentity(identityContract).balanceOf(msg.sender);
-
-        bool _hasUnclaimed = false;
-        bool _isResolver = false;
-
-        // need to check all of their identities
-        for (uint256 i = 0; i < _identitiesLength; i++) {
-            // lookup the platformUserId for the resolver
-            uint256 _tokenId = IIdentity(identityContract).tokenOfOwnerByIndex(msg.sender, i);
-            PlatformUser memory platformUser = IIdentity(identityContract).platformUser(_tokenId);
-
-            // skip this platformUser if it's not for this platform
-            if (!eq(platformUser.platformId, _platformId)) {
-                continue;
-            }
-
-            // make sure they have an unclaimed bounty
-            for (uint256 j = 0; j < supportedTokens.length; j++) {
-                if (!claimed[_platformId][_repoId][_issueId][supportedTokens[j]][platformUser.userId] && 
-                   bounties[_platformId][_repoId][_issueId][supportedTokens[j]] > 0) {
-                    _hasUnclaimed = true;
-                    break;
-                }
-            }
-
-            // make sure they are a resolver
-            for (
-                uint256 k = 0;
-                k < resolvers[_platformId][_repoId][_issueId].length;
-                k++
-            ) {
-                string memory _resolverUserId = resolvers[_platformId][_repoId][
-                    _issueId
-                ][k];
-
-                if (eq(_resolverUserId, platformUser.userId)) {
-                    _isResolver = true;
-                    break;
-                }
-            }
-
-            if (_isResolver && _hasUnclaimed) {
-                break;
-            }
-        }
+        (bool _isResolver, bool _hasUnclaimed) = LibBounties.isUnclaimedResolver(
+          identityContract,
+          supportedTokens,
+          _platformId,
+          claimed[_platformId][_repoId][_issueId],
+          bounties[_platformId][_repoId][_issueId],
+          resolvers[_platformId][_repoId][_issueId]
+        );
 
         // ensure they are actually a resolver for this issue
         if (!_isResolver) {
@@ -255,10 +218,6 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules {
         }
 
         _;
-    }
-
-    function eq(string memory a, string memory b) private pure returns (bool) {
-      return keccak256(bytes(a)) == keccak256(bytes(b));
     }
 
     function effectiveServiceFee(address _wallet) public view returns (uint8) {
@@ -465,7 +424,7 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules {
             uint256 _tokenId = IIdentity(identityContract).tokenOfOwnerByIndex(msg.sender, i);
             platformUser = IIdentity(identityContract).platformUser(_tokenId);
 
-            if (!eq(platformUser.platformId, _platformId)) {
+            if (!LibBounties.eq(platformUser.platformId, _platformId)) {
                 continue;
             }
 
@@ -493,7 +452,12 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules {
 
         for (uint256 i = 0; i < supportedTokens.length; i++) {
             address _tokenContract = supportedTokens[i];
-            uint8 _remainingClaims = _claimsRemaining(_platformId, _repoId, _issueId, _tokenContract);
+            uint8 _remainingClaims = LibBounties.claimsRemaining(
+              bounties[_platformId][_repoId][_issueId],
+              claimed[_platformId][_repoId][_issueId],
+              resolvers[_platformId][_repoId][_issueId],
+              _tokenContract
+            );
 
             if (_remainingClaims == 0) {
                 continue;
@@ -532,38 +496,6 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules {
                 );
             }
         }
-    }
-
-    function _claimsRemaining(string memory _platformId, string memory _repoId, string memory _issueId, address _tokenContract) internal view returns (uint8) {
-        uint256 _amount = bounties[_platformId][_repoId][_issueId][
-            _tokenContract
-        ];
-
-        if (_amount < 1) {
-          return 0;
-        }
-
-        uint8 _remaining = 0;
-
-        for (
-            uint256 k = 0;
-            k < resolvers[_platformId][_repoId][_issueId].length;
-            k++
-        ) {
-            string memory _resolverUserId = resolvers[_platformId][_repoId][
-                _issueId
-            ][k];
-
-            if (
-                claimed[_platformId][_repoId][_issueId][_tokenContract][
-                    _resolverUserId
-                ] == false
-            ) {
-                _remaining++;
-            }
-        }
-
-        return _remaining;
     }
 
     function withdrawFees() public onlyRole(FINANCE_ROLE) {
@@ -635,30 +567,18 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules {
         return resolvers[_platform][_repoId][_issueId].length > 0;
     }
 
-    function _validateAddress(address _address) internal pure {
-      if (_address == address(0)) {
-        revert InvalidAddress(_address);
-      }
-    }
-
-    function _validateFee(uint8 _fee) internal pure {
-      if (_fee < 0 || _fee > 100) {
-        revert InvalidFee(_fee);
-      }
-    }
-
     function emitConfigChange() internal {
         emit ConfigChange(notary, identityContract, serviceFee, maintainerFee);
     }
 
     function setNotary(address _newNotary) public onlyRole(CUSTODIAN_ROLE) {
-        _validateAddress(_newNotary);
+        LibBounties.validateAddress(_newNotary);
         notary = _newNotary;
         emitConfigChange();
     }
 
     function setIdentity(address _newIdentity) public onlyRole(CUSTODIAN_ROLE) {
-        _validateAddress(_newIdentity);
+        LibBounties.validateAddress(_newIdentity);
         identityContract = _newIdentity;
         emitConfigChange();
     }
@@ -667,7 +587,7 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules {
         public
         onlyRole(CUSTODIAN_ROLE)
     {
-        _validateFee(_newServiceFee);
+        LibBounties.validateFee(_newServiceFee);
         serviceFee = _newServiceFee;
         emitConfigChange();
     }
@@ -676,7 +596,7 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules {
         public
         onlyRole(CUSTODIAN_ROLE)
     {
-        _validateFee(_newServiceFee);
+        LibBounties.validateFee(_newServiceFee);
         if (_newServiceFee == serviceFee) {
           delete customServiceFees[_wallet];
           emit CustomFeeChange(_wallet, "service", _newServiceFee, false);
@@ -690,7 +610,7 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules {
         public
         onlyRole(CUSTODIAN_ROLE)
     {
-        _validateFee(_newMaintainerFee);
+        LibBounties.validateFee(_newMaintainerFee);
         maintainerFee = _newMaintainerFee;
         emitConfigChange();
     }
@@ -731,6 +651,11 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules {
             ERC20(_removeToken).decimals()
         );
     }
+
+    // function generateToken(string memory _name, string memory _symbol, uint8 _decimals, uint256 _totalSupply) public {
+    //   // TODO: make fee percentage configurable
+    //   address newToken = address(new GeneratedERC20(_name, _symbol, _decimals, _totalSupply, msg.sender, 10, address(this)));
+    // }
 
     function pause() public onlyRole(CUSTODIAN_ROLE) {
         _pause();

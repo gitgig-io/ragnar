@@ -24,7 +24,17 @@ describe("Bounties", () => {
     const IdentityFactory = await ethers.getContractFactory("Identity");
     const identity = await IdentityFactory.deploy(custodian.address, notary.address, "http://localhost:3000");
 
-    const BountiesFactory = await ethers.getContractFactory("Bounties");
+    const LibBountiesFactory = await ethers.getContractFactory("LibBounties");
+    const libBounties = await LibBountiesFactory.deploy();
+
+    const BountiesFactory = await ethers.getContractFactory("Bounties", {
+      // TODO: make LibBounties swappable in the Bounties contract?
+      libraries: {
+        LibBounties: await libBounties.getAddress()
+      }
+
+    });
+
     const bounties = await BountiesFactory.deploy(
       custodian.address,
       finance.address,
@@ -33,7 +43,7 @@ describe("Bounties", () => {
       [usdcAddr, arbAddr, wethAddr]
     );
 
-    return { owner, custodian, bounties, identity, usdc, arb, weth, finance, notary, issuer, maintainer, contributor, contributor2, contributor3 };
+    return { owner, custodian, bounties, libBounties, identity, usdc, arb, weth, finance, notary, issuer, maintainer, contributor, contributor2, contributor3 };
   }
 
   async function claimableBountyFixture(contributorIds?: string[]) {
@@ -859,11 +869,11 @@ describe("Bounties", () => {
     });
 
     it('should revert with invalid notary address', async () => {
-      const { bounties, custodian } = await bountiesFixture();
+      const { bounties, libBounties, custodian } = await bountiesFixture();
 
       // when/then
       await expect(bounties.connect(custodian).setNotary(ethers.ZeroAddress))
-        .to.be.revertedWithCustomError(bounties, "InvalidAddress")
+        .to.be.revertedWithCustomError(libBounties, "InvalidAddress")
         .withArgs(ethers.ZeroAddress);
     });
 
@@ -938,11 +948,11 @@ describe("Bounties", () => {
     });
 
     it('should revert with invalid identity address', async () => {
-      const { bounties, custodian } = await bountiesFixture();
+      const { bounties, libBounties, custodian } = await bountiesFixture();
 
       // when/then
       await expect(bounties.connect(custodian).setIdentity(ethers.ZeroAddress))
-        .to.be.revertedWithCustomError(bounties, "InvalidAddress")
+        .to.be.revertedWithCustomError(libBounties, "InvalidAddress")
         .withArgs(ethers.ZeroAddress);
     });
 
@@ -1012,11 +1022,11 @@ describe("Bounties", () => {
     });
 
     it('should not allow service fee over 100', async () => {
-      const { bounties, custodian } = await bountiesFixture();
+      const { bounties, libBounties, custodian } = await bountiesFixture();
 
       // when/then
       await expect(bounties.connect(custodian).setServiceFee(101))
-        .to.be.revertedWithCustomError(bounties, "InvalidFee")
+        .to.be.revertedWithCustomError(libBounties, "InvalidFee")
         .withArgs(101);
     });
   });
@@ -1079,11 +1089,11 @@ describe("Bounties", () => {
     });
 
     it('should not allow service fee over 100', async () => {
-      const { bounties, custodian, issuer } = await bountiesFixture();
+      const { bounties, libBounties, custodian, issuer } = await bountiesFixture();
 
       // when/then
       await expect(bounties.connect(custodian).setCustomServiceFee(issuer.address, 101))
-        .to.be.revertedWithCustomError(bounties, "InvalidFee")
+        .to.be.revertedWithCustomError(libBounties, "InvalidFee")
         .withArgs(101);
     });
   });
@@ -1142,21 +1152,21 @@ describe("Bounties", () => {
     });
 
     it('should not allow maintainer fee over 100', async () => {
-      const { bounties, custodian } = await bountiesFixture();
+      const { bounties, libBounties, custodian } = await bountiesFixture();
 
       // when/then
       await expect(bounties.connect(custodian).setMaintainerFee(101))
-        .to.be.revertedWithCustomError(bounties, "InvalidFee")
+        .to.be.revertedWithCustomError(libBounties, "InvalidFee")
         .withArgs(101);
     });
 
     // TODO: figure out how to test for a TypeError INVALID_ARGUMENT
     it.skip('should not allow maintainer fee below zero', async () => {
-      const { bounties, custodian } = await bountiesFixture();
+      const { bounties, libBounties, custodian } = await bountiesFixture();
 
       // when/then
       await expect(bounties.connect(custodian).setMaintainerFee(-1))
-        .to.be.revertedWithCustomError(bounties, "InvalidFee")
+        .to.be.revertedWithCustomError(libBounties, "InvalidFee")
         .withArgs(-1);
     });
   });
