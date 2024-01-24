@@ -2,6 +2,7 @@ import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
 import "@nomiclabs/hardhat-web3";
 import "hardhat-abi-exporter";
+import "hardhat-gas-reporter";
 import env from "dotenv";
 
 env.config();
@@ -12,10 +13,17 @@ const {
   ARB_SEPOLIA_OWNER_KEY,
   ARB_SEPOLIA_CUSTODIAN_KEY,
   ARB_SEPOLIA_FINANCE_KEY,
-  ARB_SEPOLIA_NOTARY_KEY
+  ARB_SEPOLIA_NOTARY_KEY,
+  COINMARKETCAP_API_KEY
 } = process.env;
 
 const config: HardhatUserConfig = {
+  gasReporter: {
+    currency: "USD",
+    coinmarketcap: COINMARKETCAP_API_KEY,
+    gasPriceApi: "https://api.arbiscan.io/api?module=proxy&action=eth_gasPrice",
+    enabled: false,
+  },
   solidity: {
     version: "0.8.20",
     settings: {
