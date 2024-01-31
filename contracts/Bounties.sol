@@ -177,6 +177,14 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules {
         emit ConfigChange(notary, identityContract, serviceFee, maintainerFee);
     }
 
+    modifier onlyRoles(bytes32 role1, bytes32 role2) {
+      if (!hasRole(role1, msg.sender) && !hasRole(role2, msg.sender)) {
+          revert AccessControlUnauthorizedAccount(msg.sender, role1);
+      }
+
+      _;
+    }
+
     modifier supportedToken(address tokenContract) {
         if (!isSupportedToken[tokenContract]) {
             revert TokenSupportError(tokenContract, false);
@@ -625,15 +633,7 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules {
         emitConfigChange();
     }
 
-    function addToken(address _newToken) public onlyRole(CUSTODIAN_ROLE) {
-      _doAddToken(_newToken);
-    }
-
-    function addTokenTC(address _newToken) public onlyRole(TRUSTED_CONTRACT_ROLE) {
-      _doAddToken(_newToken);
-    }
-
-    function _doAddToken(address _newToken) private {
+    function addToken(address _newToken) public onlyRoles(CUSTODIAN_ROLE, TRUSTED_CONTRACT_ROLE) {
         if (isSupportedToken[_newToken]) {
             revert TokenSupportError(_newToken, true);
         }
@@ -649,15 +649,7 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules {
         );
     }
 
-    function removeToken(address _removeToken) public onlyRole(CUSTODIAN_ROLE) {
-      _doRemoveToken(_removeToken);
-    }
-
-    function removeTokenTC(address _removeToken) public onlyRole(TRUSTED_CONTRACT_ROLE) {
-      _doRemoveToken(_removeToken);
-    }
-
-    function _doRemoveToken(address _removeToken) private {
+    function removeToken(address _removeToken) public onlyRoles(CUSTODIAN_ROLE, TRUSTED_CONTRACT_ROLE) {
         if (!isSupportedToken[_removeToken]) {
             revert TokenSupportError(_removeToken, false);
         }

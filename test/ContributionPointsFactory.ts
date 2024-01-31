@@ -3,8 +3,8 @@ import { ethers } from "hardhat";
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-const TOTAL_SUPPLY = 1_000_000;
-const DECIMALS = 0;
+const TOTAL_SUPPLY = 20_000_000;
+const DECIMALS = 2;
 
 describe("ContributionPointsFactory", () => {
   async function bountiesFixture() {

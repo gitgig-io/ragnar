@@ -7,6 +7,7 @@ import {ContributionPointsERC20} from "./ContributionPointsERC20.sol";
 // TODO: import the interface
 import {Bounties} from "./Bounties.sol";
 
+// TODO: add event to all admin interfaces
 contract ContributionPointsFactory is AccessControlDefaultAdminRules {
     uint8 public dec;
     uint256 public totalSupply;
@@ -28,6 +29,10 @@ contract ContributionPointsFactory is AccessControlDefaultAdminRules {
         address minter
     );
 
+    // TODO: make this a payable function (0.2 ETH)
+    // TODO: make a maintainer function to set the payable amount
+    // TODO: add flag to limit transferability
+    // TODO: bake the org name into the token contract
     constructor(
         address _custodian,
         uint8 _decimals,
@@ -74,6 +79,7 @@ contract ContributionPointsFactory is AccessControlDefaultAdminRules {
         }
     }
 
+    // TODO: take an org name and signature (to validate the org name)
     function createContributionPointsToken(
         string calldata _name,
         string calldata _symbol
@@ -92,7 +98,7 @@ contract ContributionPointsFactory is AccessControlDefaultAdminRules {
 
         for (uint256 i = 0; i < bountiesContracts.length; i++) {
             // TODO: make this an interface
-            Bounties(bountiesContracts[i]).addTokenTC(cpToken);
+            Bounties(bountiesContracts[i]).addToken(cpToken);
         }
 
         emit PointsTokenCreated(
