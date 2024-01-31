@@ -9,7 +9,6 @@ import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {AccessControlDefaultAdminRules} from "@openzeppelin/contracts/access/extensions/AccessControlDefaultAdminRules.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {IIdentity, PlatformUser} from "./IIdentity.sol";
-import {GeneratedERC20} from "./GeneratedERC20.sol";
 import {LibBounties} from "./LibBounties.sol";
 
 contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules {
@@ -104,6 +103,9 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules {
     bytes32 public constant FINANCE_ADMIN_ROLE =
         keccak256("FINANCE_ADMIN_ROLE");
     bytes32 public constant FINANCE_ROLE = keccak256("FINANCE_ROLE");
+    // TODO: do we need an admin for this? should it be custodian?
+    bytes32 public constant TRUSTED_CONTRACT_ADMIN_ROLE = keccak256("TRUSTED_CONTRACT_ADMIN_ROLE");
+    bytes32 public constant TRUSTED_CONTRACT_ROLE = keccak256("TRUSTED_CONTRACT_ROLE");
 
     bytes32 private constant TYPE_HASH = keccak256("MaintainerClaim(string maintainerUserId,string platformId,string repoId,string issueId,string[] resolverIds)");
 
@@ -150,12 +152,14 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules {
         AccessControlDefaultAdminRules(3 days, msg.sender) 
         EIP712("GitGigBounties", "1")
     {
+        _grantRole(TRUSTED_CONTRACT_ADMIN_ROLE, _custodian);
         _grantRole(CUSTODIAN_ADMIN_ROLE, _custodian);
         _grantRole(CUSTODIAN_ROLE, _custodian);
         _grantRole(FINANCE_ADMIN_ROLE, _finance);
         _grantRole(FINANCE_ROLE, _finance);
         _setRoleAdmin(CUSTODIAN_ROLE, CUSTODIAN_ADMIN_ROLE);
         _setRoleAdmin(FINANCE_ROLE, FINANCE_ADMIN_ROLE);
+        _setRoleAdmin(TRUSTED_CONTRACT_ROLE, TRUSTED_CONTRACT_ADMIN_ROLE);
         notary = _notary;
         identityContract = _identityContract;
         supportedTokens = _supportedTokens;
@@ -229,6 +233,12 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules {
       return serviceFee;
     }
 
+    // TODO: store a list of supported token contracts for each bounty to ensure we
+    // don't need to loop over all tokens for each bounty claim, only those tokens
+    // actually on the bounty.
+
+    // TODO: allow for withdrawing arbitrary tokens from the contract to deal with
+    // airdropped tokens.
     function postBounty(
         string memory _platform,
         string memory _repoId,
@@ -616,6 +626,14 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules {
     }
 
     function addToken(address _newToken) public onlyRole(CUSTODIAN_ROLE) {
+      _doAddToken(_newToken);
+    }
+
+    function addTokenTC(address _newToken) public onlyRole(TRUSTED_CONTRACT_ROLE) {
+      _doAddToken(_newToken);
+    }
+
+    function _doAddToken(address _newToken) private {
         if (isSupportedToken[_newToken]) {
             revert TokenSupportError(_newToken, true);
         }
@@ -632,6 +650,14 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules {
     }
 
     function removeToken(address _removeToken) public onlyRole(CUSTODIAN_ROLE) {
+      _doRemoveToken(_removeToken);
+    }
+
+    function removeTokenTC(address _removeToken) public onlyRole(TRUSTED_CONTRACT_ROLE) {
+      _doRemoveToken(_removeToken);
+    }
+
+    function _doRemoveToken(address _removeToken) private {
         if (!isSupportedToken[_removeToken]) {
             revert TokenSupportError(_removeToken, false);
         }
@@ -651,11 +677,6 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules {
             ERC20(_removeToken).decimals()
         );
     }
-
-    // function generateToken(string memory _name, string memory _symbol, uint8 _decimals, uint256 _totalSupply) public {
-    //   // TODO: make fee percentage configurable
-    //   address newToken = address(new GeneratedERC20(_name, _symbol, _decimals, _totalSupply, msg.sender, 10, address(this)));
-    // }
 
     function pause() public onlyRole(CUSTODIAN_ROLE) {
         _pause();
