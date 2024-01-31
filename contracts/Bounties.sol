@@ -10,8 +10,9 @@ import {AccessControlDefaultAdminRules} from "@openzeppelin/contracts/access/ext
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {IIdentity, PlatformUser} from "./IIdentity.sol";
 import {LibBounties} from "./LibBounties.sol";
+import {ITokenSupportable} from "./ITokenSupportable.sol";
 
-contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules {
+contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSupportable {
     using ECDSA for bytes32;
     using MessageHashUtils for bytes32;
 

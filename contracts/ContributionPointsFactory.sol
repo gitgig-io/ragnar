@@ -4,10 +4,9 @@ pragma solidity ^0.8.20;
 
 import {AccessControlDefaultAdminRules} from "@openzeppelin/contracts/access/extensions/AccessControlDefaultAdminRules.sol";
 import {ContributionPointsERC20} from "./ContributionPointsERC20.sol";
-// TODO: import the interface
-import {Bounties} from "./Bounties.sol";
+import {ITokenSupportable} from "./ITokenSupportable.sol";
 
-// TODO: add event to all admin interfaces
+// TODO: add event to all admin functions
 contract ContributionPointsFactory is AccessControlDefaultAdminRules {
     uint8 public dec;
     uint256 public totalSupply;
@@ -97,8 +96,7 @@ contract ContributionPointsFactory is AccessControlDefaultAdminRules {
         );
 
         for (uint256 i = 0; i < bountiesContracts.length; i++) {
-            // TODO: make this an interface
-            Bounties(bountiesContracts[i]).addToken(cpToken);
+            ITokenSupportable(bountiesContracts[i]).addToken(cpToken);
         }
 
         emit PointsTokenCreated(
