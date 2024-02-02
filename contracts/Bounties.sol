@@ -11,8 +11,9 @@ import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {IIdentity, PlatformUser} from "./IIdentity.sol";
 import {LibBounties} from "./LibBounties.sol";
 import {ITokenSupportable} from "./ITokenSupportable.sol";
+import {Notarizable} from "./Notarizable.sol";
 
-contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSupportable {
+contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSupportable, Notarizable {
     using ECDSA for bytes32;
     using MessageHashUtils for bytes32;
 
@@ -110,9 +111,6 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
 
     bytes32 private constant TYPE_HASH = keccak256("MaintainerClaim(string maintainerUserId,string platformId,string repoId,string issueId,string[] resolverIds)");
 
-    // for verifying signatures
-    address public notary;
-
     // the identity contract
     address public identityContract;
 
@@ -152,6 +150,7 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
         Pausable() 
         AccessControlDefaultAdminRules(3 days, msg.sender) 
         EIP712("GitGigBounties", "1")
+        Notarizable(_notary)
     {
         _grantRole(TRUSTED_CONTRACT_ADMIN_ROLE, _custodian);
         _grantRole(CUSTODIAN_ADMIN_ROLE, _custodian);
@@ -161,7 +160,6 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
         _setRoleAdmin(CUSTODIAN_ROLE, CUSTODIAN_ADMIN_ROLE);
         _setRoleAdmin(FINANCE_ROLE, FINANCE_ADMIN_ROLE);
         _setRoleAdmin(TRUSTED_CONTRACT_ROLE, TRUSTED_CONTRACT_ADMIN_ROLE);
-        notary = _notary;
         identityContract = _identityContract;
         supportedTokens = _supportedTokens;
         for (uint256 i = 0; i < _supportedTokens.length; i++) {
@@ -591,8 +589,7 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
     }
 
     function setNotary(address _newNotary) public onlyRole(CUSTODIAN_ROLE) {
-        LibBounties.validateAddress(_newNotary);
-        notary = _newNotary;
+        _setNotary(_newNotary);
         emitConfigChange();
     }
 

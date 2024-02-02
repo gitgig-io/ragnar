@@ -1,5 +1,5 @@
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { Bounties, Identity } from "../../typechain-types";
+import { Bounties, PointsTokenFactory, Identity } from "../../typechain-types";
 import { TypedDataDomain, TypedDataField } from "ethers";
 
 export async function mintSignature(identity: Identity, params: any[], signer: HardhatEthersSigner) {
@@ -67,6 +67,36 @@ export async function maintainerClaimSignature(bounties: Bounties, params: any[]
     repoId: params[2] as string,
     issueId: params[3] as string,
     resolverIds: params[4] as string[],
+  };
+
+  const signature = await signer.signTypedData(domain, types, values);
+  return signature;
+}
+
+export async function createPointsTokenSignature(cpFactory: PointsTokenFactory, params: any[], signer: HardhatEthersSigner) {
+  const domain: TypedDataDomain = {
+    name: "GitGigPointsFactory",
+    version: "1",
+    chainId: 1337,
+    verifyingContract: await cpFactory.getAddress(),
+  };
+
+  const types: Record<string, TypedDataField[]> = {
+    CreatePointsToken: [
+      { name: "name", type: "string" },
+      { name: "symbol", type: "string" },
+      { name: "platformId", type: "string" },
+      { name: "org", type: "string" },
+      { name: "creator", type: "address" },
+    ]
+  };
+
+  const values: Record<string, any> = {
+    name: params[0] as string,
+    symbol: params[1] as string,
+    platformId: params[2] as string,
+    org: params[3] as string,
+    creator: params[4] as string,
   };
 
   const signature = await signer.signTypedData(domain, types, values);

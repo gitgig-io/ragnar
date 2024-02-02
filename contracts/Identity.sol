@@ -10,6 +10,7 @@ import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {AccessControlDefaultAdminRules} from "@openzeppelin/contracts/access/extensions/AccessControlDefaultAdminRules.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {IIdentity, PlatformUser} from "./IIdentity.sol";
+import {Notarizable} from "./Notarizable.sol";
 
 contract Identity is
     IIdentity,
@@ -18,7 +19,8 @@ contract Identity is
     ERC721Enumerable,
     AccessControlDefaultAdminRules,
     EIP712,
-    Pausable
+    Pausable,
+    Notarizable
 {
     using Strings for uint256;
     using ECDSA for bytes32;
@@ -35,7 +37,6 @@ contract Identity is
     event ConfigChange(address notary, string baseUri);
 
     error AlreadyMinted(string platformId, string platformUserId);
-    error InvalidAddress(address addr);
     error InvalidNonce(uint16 given, uint16 expected);
     error InvalidSignature();
     error NotSupported();
@@ -49,8 +50,6 @@ contract Identity is
     // start at 1 so we can tell the difference between a minted and non-minted
     // token for a user in the tokenIdForPlatformUser mapping
     uint256 private nextTokenId = 1;
-
-    address public notary;
 
     string public baseUri;
 
@@ -70,8 +69,8 @@ contract Identity is
         ERC721Enumerable()
         AccessControlDefaultAdminRules(3 days, msg.sender)
         Pausable()
+        Notarizable(_notary)
     {
-        notary = _notary;
         baseUri = _baseUri;
         _setRoleAdmin(CUSTODIAN_ROLE, CUSTODIAN_ADMIN_ROLE);
         _grantRole(CUSTODIAN_ADMIN_ROLE, _custodian);
