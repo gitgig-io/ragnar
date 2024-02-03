@@ -3,7 +3,7 @@ import { ethers } from "hardhat";
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { createPointsTokenSignature } from "./helpers/signatureHelpers";
-import { PointsTokenFactory } from "../typechain-types";
+import { OrgTokenRegistry, PointsTokenFactory } from "../typechain-types";
 
 const TOTAL_SUPPLY = 20_000_000;
 const DECIMALS = 2;
@@ -38,9 +38,16 @@ describe("PointsTokenFactory", () => {
     return { owner, custodian, bounties, libBounties, identity, finance, notary, issuer, maintainer, contributor, contributor2, contributor3 };
   }
 
-  async function createCpFactory(custodian: HardhatEthersSigner, notary: HardhatEthersSigner) {
+  async function createOrgTokenRegistry(custodian: HardhatEthersSigner) {
+    const orgTokenRegistryFactory = await ethers.getContractFactory("OrgTokenRegistry");
+    const orgTokenRegistry = await orgTokenRegistryFactory.deploy(custodian);
+
+    return orgTokenRegistry;
+  }
+
+  async function createCpFactory(custodian: HardhatEthersSigner, notary: HardhatEthersSigner, registry: OrgTokenRegistry) {
     const pointsFactoryFactory = await ethers.getContractFactory("PointsTokenFactory");
-    const pointsFactory = await pointsFactoryFactory.deploy(custodian, notary, DECIMALS, TOTAL_SUPPLY, FEE);
+    const pointsFactory = await pointsFactoryFactory.deploy(custodian, notary, await registry.getAddress(), DECIMALS, TOTAL_SUPPLY, FEE);
 
     return pointsFactory;
   }
@@ -48,14 +55,20 @@ describe("PointsTokenFactory", () => {
   async function cpFixture() {
     const { owner, custodian, bounties, libBounties, identity, finance, notary, issuer, maintainer, contributor, contributor2, contributor3 } = await bountiesFixture();
 
-    const pointsFactory = await createCpFactory(custodian, notary);
+    const registry = await createOrgTokenRegistry(custodian);
+
+    const pointsFactory = await createCpFactory(custodian, notary, registry);
 
     await pointsFactory.connect(custodian).addBountiesContract(bounties);
     await bounties
       .connect(custodian)
       .grantRole(await bounties.TRUSTED_CONTRACT_ROLE(), pointsFactory);
 
-    return { owner, custodian, bounties, libBounties, identity, pointsFactory, finance, notary, issuer, maintainer, contributor, contributor2, contributor3 };
+    registry
+      .connect(custodian)
+      .grantRole(await registry.TRUSTED_CONTRACT_ROLE(), pointsFactory.getAddress());
+
+    return { owner, custodian, bounties, libBounties, identity, pointsFactory, registry, finance, notary, issuer, maintainer, contributor, contributor2, contributor3 };
   }
 
   describe("Deployment", () => {
@@ -66,11 +79,12 @@ describe("PointsTokenFactory", () => {
   });
 
   describe("Create Points Token", () => {
+    const BASE_PARAMS = ["Test Points", "cpTST", "1", "GitGig"] as const;
+
     async function pointsTokenParamsFixture(pointsFactory: PointsTokenFactory, issuer: HardhatEthersSigner, notary: HardhatEthersSigner) {
-      const baseParams = ["Test Points", "cpTST", "1", "GitGig"];
-      const sigParams = [...baseParams, issuer.address];
+      const sigParams = [...BASE_PARAMS, issuer.address];
       const signature = await createPointsTokenSignature(pointsFactory, sigParams, notary);
-      return [...baseParams, signature];
+      return [...BASE_PARAMS, signature];
     }
 
     async function applyCreatePointsToken(pointsFactory: PointsTokenFactory, issuer: HardhatEthersSigner, params: any[], fee = FEE) {
@@ -149,12 +163,34 @@ describe("PointsTokenFactory", () => {
       await expect(applyCreatePointsToken(pointsFactory, issuer, [...params, wrongSignature]))
         .to.be.revertedWithCustomError(pointsFactory, "InvalidSignature");
     });
+
+    it("should register token in registry", async () => {
+      const { pointsFactory, issuer, notary, registry } = await cpFixture();
+      expect(await registry.getContract(BASE_PARAMS[2], BASE_PARAMS[3], BASE_PARAMS[1]))
+        .to.equal(ethers.ZeroAddress);
+
+      // when
+      await createPointsToken(pointsFactory, issuer, notary);
+
+      // then
+      expect(await registry.getContract(BASE_PARAMS[2], BASE_PARAMS[3], BASE_PARAMS[1]))
+        .to.not.equal(ethers.ZeroAddress);
+    });
+
+    it("should revert when org already has symbol", async () => {
+      const { pointsFactory, issuer, notary, registry } = await cpFixture();
+      await createPointsToken(pointsFactory, issuer, notary);
+
+      await expect(createPointsToken(pointsFactory, issuer, notary))
+        .to.be.revertedWithCustomError(registry, "SymbolAlreadyExists");
+    });
   });
 
   describe("Add Bounties Contract", () => {
     it("should add contract to bountiesContracts", async () => {
       const { bounties, custodian, notary } = await bountiesFixture();
-      const pointsFactory = await createCpFactory(custodian, notary);
+      const registry = await createOrgTokenRegistry(custodian);
+      const pointsFactory = await createCpFactory(custodian, notary, registry);
       const bountiesAddr = await bounties.getAddress();
 
       // ensure not there
@@ -168,7 +204,8 @@ describe("PointsTokenFactory", () => {
 
     it("should not allow contract to be added twice", async () => {
       const { bounties, custodian, notary } = await bountiesFixture();
-      const pointsFactory = await createCpFactory(custodian, notary);
+      const registry = await createOrgTokenRegistry(custodian);
+      const pointsFactory = await createCpFactory(custodian, notary, registry);
       const bountiesAddr = await bounties.getAddress();
 
       // ensure not there
@@ -184,7 +221,8 @@ describe("PointsTokenFactory", () => {
 
     it("should revert when called by non-custodian", async () => {
       const { bounties, custodian, issuer, notary } = await bountiesFixture();
-      const pointsFactory = await createCpFactory(custodian, notary);
+      const registry = await createOrgTokenRegistry(custodian);
+      const pointsFactory = await createCpFactory(custodian, notary, registry);
       const bountiesAddr = await bounties.getAddress();
 
       // ensure not there
@@ -197,12 +235,24 @@ describe("PointsTokenFactory", () => {
       // still not there
       await expect(pointsFactory.bountiesContracts(0)).to.be.reverted;
     });
+
+    it("should emit ConfigChange event", async () => {
+      const { bounties, custodian, notary } = await bountiesFixture();
+      const registry = await createOrgTokenRegistry(custodian);
+      const pointsFactory = await createCpFactory(custodian, notary, registry);
+      const bountiesAddr = await bounties.getAddress();
+
+      // when/then
+      await expect(pointsFactory.connect(custodian).addBountiesContract(bountiesAddr))
+        .to.emit(pointsFactory, "ConfigChange");
+    });
   });
 
   describe("Remove Bounties Contract", () => {
     it("should remove contract from bountiesContracts", async () => {
       const { bounties, custodian, notary } = await bountiesFixture();
-      const pointsFactory = await createCpFactory(custodian, notary);
+      const registry = await createOrgTokenRegistry(custodian);
+      const pointsFactory = await createCpFactory(custodian, notary, registry);
       const bountiesAddr = await bounties.getAddress();
 
       await pointsFactory.connect(custodian).addBountiesContract(bountiesAddr);
@@ -216,7 +266,8 @@ describe("PointsTokenFactory", () => {
 
     it("should revert when contract not in bountiesContracts", async () => {
       const { bounties, custodian, notary } = await bountiesFixture();
-      const pointsFactory = await createCpFactory(custodian, notary);
+      const registry = await createOrgTokenRegistry(custodian);
+      const pointsFactory = await createCpFactory(custodian, notary, registry);
       const bountiesAddr = await bounties.getAddress();
 
       // when
@@ -227,7 +278,8 @@ describe("PointsTokenFactory", () => {
 
     it("should revert when called by non-custodian", async () => {
       const { bounties, custodian, issuer, notary } = await bountiesFixture();
-      const pointsFactory = await createCpFactory(custodian, notary);
+      const registry = await createOrgTokenRegistry(custodian);
+      const pointsFactory = await createCpFactory(custodian, notary, registry);
       const bountiesAddr = await bounties.getAddress();
 
       await pointsFactory.connect(custodian).addBountiesContract(bountiesAddr);
@@ -239,6 +291,20 @@ describe("PointsTokenFactory", () => {
 
       // then
       expect(await pointsFactory.bountiesContracts(0)).to.equal(bountiesAddr);
+    });
+
+    it("should emit ConfigChange event", async () => {
+      const { bounties, custodian, notary } = await bountiesFixture();
+      const registry = await createOrgTokenRegistry(custodian);
+      const pointsFactory = await createCpFactory(custodian, notary, registry);
+      const bountiesAddr = await bounties.getAddress();
+
+      await pointsFactory.connect(custodian).addBountiesContract(bountiesAddr);
+      expect(await pointsFactory.bountiesContracts(0)).to.equal(bountiesAddr);
+
+      // when/then
+      await expect(pointsFactory.connect(custodian).removeBountiesContract(bountiesAddr))
+        .to.emit(pointsFactory, "ConfigChange");
     });
   });
 
@@ -262,6 +328,12 @@ describe("PointsTokenFactory", () => {
         .to.be.revertedWithCustomError(pointsFactory, "AccessControlUnauthorizedAccount");
       expect(await pointsFactory.dec()).to.equal(DECIMALS);
     });
+
+    it("should emit ConfigChange event", async () => {
+      const { pointsFactory, custodian } = await cpFixture();
+      await expect(pointsFactory.connect(custodian).setDecimals(18))
+        .to.emit(pointsFactory, "ConfigChange");
+    });
   });
 
   describe("Set Total Supply", () => {
@@ -276,6 +348,60 @@ describe("PointsTokenFactory", () => {
       await expect(pointsFactory.connect(issuer).setTotalSupply(100_000))
         .to.be.revertedWithCustomError(pointsFactory, "AccessControlUnauthorizedAccount");
       expect(await pointsFactory.totalSupply()).to.equal(TOTAL_SUPPLY);
+    });
+
+    it("should emit ConfigChange event", async () => {
+      const { pointsFactory, custodian } = await cpFixture();
+      await expect(pointsFactory.connect(custodian).setTotalSupply(50_000))
+        .to.emit(pointsFactory, "ConfigChange");
+    });
+  });
+
+  describe("Set Fee", () => {
+    it("should update fee", async () => {
+      const { pointsFactory, custodian } = await cpFixture();
+      await pointsFactory.connect(custodian).setFee(50_000)
+      expect(await pointsFactory.fee()).to.equal(50_000);
+    });
+
+    it("should revert when called by non-custodian", async () => {
+      const { pointsFactory, issuer } = await cpFixture();
+      await expect(pointsFactory.connect(issuer).setFee(100_000))
+        .to.be.revertedWithCustomError(pointsFactory, "AccessControlUnauthorizedAccount");
+      expect(await pointsFactory.fee()).to.equal(FEE);
+    });
+
+    it("should emit ConfigChange event", async () => {
+      const { pointsFactory, custodian } = await cpFixture();
+      await expect(pointsFactory.connect(custodian).setFee(50_000))
+        .to.emit(pointsFactory, "ConfigChange");
+    });
+  });
+
+  describe("Set Registry", () => {
+    it("should update registry", async () => {
+      const { pointsFactory, custodian } = await cpFixture();
+      const registry = await createOrgTokenRegistry(custodian);
+      const regAddr = await registry.getAddress();
+
+      await pointsFactory.connect(custodian).setRegistry(regAddr);
+      expect(await pointsFactory.registry()).to.equal(regAddr);
+    });
+
+    it("should revert when called by non-custodian", async () => {
+      const { pointsFactory, issuer } = await cpFixture();
+      await expect(pointsFactory.connect(issuer).setFee(100_000))
+        .to.be.revertedWithCustomError(pointsFactory, "AccessControlUnauthorizedAccount");
+      expect(await pointsFactory.fee()).to.equal(FEE);
+    });
+
+    it("should emit ConfigChange event", async () => {
+      const { pointsFactory, custodian } = await cpFixture();
+      const registry = await createOrgTokenRegistry(custodian);
+      const regAddr = await registry.getAddress();
+
+      await expect(pointsFactory.connect(custodian).setRegistry(regAddr))
+        .to.emit(pointsFactory, "ConfigChange");
     });
   });
 });
