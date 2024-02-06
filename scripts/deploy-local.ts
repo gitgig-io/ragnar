@@ -79,6 +79,7 @@ async function main() {
 
   const pointsTokenFactory = await ethers.deployContract("PointsTokenFactory", [
     custodian.address,
+    finance.address,
     notary.address,
     tokenRegistryAddr,
     POINTS_TOKEN_FACTORY_DECIMALS,

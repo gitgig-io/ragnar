@@ -11,6 +11,7 @@ import {Notarizable} from "./Notarizable.sol";
 import {IOrgTokenRegistry} from "./IOrgTokenRegistry.sol";
 
 // TODO: make this pausable?
+// TODO: make the token contract configurable?
 contract PointsTokenFactory is
     EIP712,
     AccessControlDefaultAdminRules,
