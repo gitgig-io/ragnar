@@ -10,6 +10,7 @@ import {ITokenSupportable} from "./ITokenSupportable.sol";
 import {Notarizable} from "./Notarizable.sol";
 import {IOrgTokenRegistry} from "./IOrgTokenRegistry.sol";
 
+// TODO: make this pausable?
 contract PointsTokenFactory is
     EIP712,
     AccessControlDefaultAdminRules,
@@ -24,6 +25,9 @@ contract PointsTokenFactory is
     bytes32 public constant CUSTODIAN_ADMIN_ROLE =
         keccak256("CUSTODIAN_ADMIN_ROLE");
     bytes32 public constant CUSTODIAN_ROLE = keccak256("CUSTODIAN_ROLE");
+    bytes32 public constant FINANCE_ADMIN_ROLE =
+        keccak256("FINANCE_ADMIN_ROLE");
+    bytes32 public constant FINANCE_ROLE = keccak256("FINANCE_ROLE");
 
     bytes32 private constant TYPE_HASH =
         keccak256(
@@ -54,9 +58,12 @@ contract PointsTokenFactory is
         address registry
     );
 
+    event FeeWithdraw(address recipient, uint256 amount);
+
     // TODO: add flag to limit transferability
     constructor(
         address _custodian,
+        address _finance,
         address _notary,
         address _registry,
         uint8 _decimals,
@@ -69,7 +76,10 @@ contract PointsTokenFactory is
     {
         _grantRole(CUSTODIAN_ADMIN_ROLE, _custodian);
         _grantRole(CUSTODIAN_ROLE, _custodian);
+        _grantRole(FINANCE_ADMIN_ROLE, _finance);
+        _grantRole(FINANCE_ROLE, _finance);
         _setRoleAdmin(CUSTODIAN_ROLE, CUSTODIAN_ADMIN_ROLE);
+        _setRoleAdmin(FINANCE_ROLE, FINANCE_ADMIN_ROLE);
         registry = _registry;
         dec = _decimals;
         totalSupply = _totalSupply;
@@ -241,6 +251,19 @@ contract PointsTokenFactory is
         }
 
         emitConfigChange();
+    }
+
+    // ------------------
+    // finance functions
+    // ------------------
+
+    function withdrawFees() public onlyRole(FINANCE_ROLE) {
+        uint256 amount = address(this).balance;
+        address payable receipient = payable(msg.sender);
+
+        receipient.transfer(amount);
+
+        emit FeeWithdraw(receipient, amount);
     }
 
     function emitConfigChange() private {
