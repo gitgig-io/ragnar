@@ -41,7 +41,7 @@ contract PointsTokenFactory is
     error WrongFeeAmount(uint256);
 
     event PointsTokenCreated(
-        address cpToken,
+        address pToken,
         string name,
         string symbol,
         uint8 decimals,
@@ -98,7 +98,7 @@ contract PointsTokenFactory is
         _validateSymbol(_symbol);
         _validateSignature(_name, _symbol, _platformId, _org, _signature);
 
-        address _cpToken = address(
+        address _pToken = address(
             new PointsToken(
                 _name,
                 _symbol,
@@ -111,15 +111,15 @@ contract PointsTokenFactory is
         );
 
         for (uint256 i = 0; i < bountiesContracts.length; i++) {
-            ITokenSupportable(bountiesContracts[i]).addToken(_cpToken);
+            ITokenSupportable(bountiesContracts[i]).addToken(_pToken);
         }
 
         // add symbol to registry
         // this will fail if the symbol already exists in the org
-        IOrgTokenRegistry(registry).add(_platformId, _org, _symbol, _cpToken);
+        IOrgTokenRegistry(registry).add(_platformId, _org, _symbol, _pToken);
 
         emit PointsTokenCreated(
-            _cpToken,
+            _pToken,
             _name,
             _symbol,
             dec,
@@ -137,7 +137,7 @@ contract PointsTokenFactory is
     }
 
     function _validateSymbol(string calldata _symbol) private pure {
-        if (!_eq(_substr(_symbol, 0, 2), "cp")) {
+        if (!_eq(_substr(_symbol, 0, 1), "p")) {
             revert InvalidSymbol(_symbol);
         }
     }
