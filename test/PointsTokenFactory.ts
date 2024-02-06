@@ -20,7 +20,6 @@ describe("PointsTokenFactory", () => {
     const libBounties = await LibBountiesFactory.deploy();
 
     const BountiesFactory = await ethers.getContractFactory("Bounties", {
-      // TODO: make LibBounties swappable in the Bounties contract?
       libraries: {
         LibBounties: await libBounties.getAddress()
       }

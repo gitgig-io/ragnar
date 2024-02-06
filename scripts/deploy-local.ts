@@ -1,6 +1,10 @@
 import { ethers } from "hardhat";
 import fs from "fs";
 
+const POINTS_TOKEN_FACTORY_TOTAL_SUPPLY = 20_000_000;
+const POINTS_TOKEN_FACTORY_DECIMALS = 2;
+const POINTS_TOKEN_FACTORY_FEE = ethers.WeiPerEther / ethers.toBigInt(5);
+
 async function main() {
   const [owner, custodian, finance, notary, issuer] = await ethers.getSigners();
 
@@ -48,23 +52,67 @@ async function main() {
   const identityAddress = await identity.getAddress();
   console.log(`Identity: ${identityAddress}`);
 
-  const bounties = await ethers.deployContract("Bounties", [
-    custodian.address,
-    finance.address,
-    notary.address,
-    await identity.getAddress(),
-    [usdcAddress, arbAddress, wethAddress]
-  ]);
+  const libBounties = await ethers.deployContract("LibBounties");
+  const libBountiesAddr = await libBounties.getAddress();
+  console.log(`Lib Bounties: ${libBountiesAddr}`);
+
+  const bounties = await ethers.deployContract("Bounties",
+    [
+      custodian.address,
+      finance.address,
+      notary.address,
+      await identity.getAddress(),
+      [usdcAddress, arbAddress, wethAddress]
+    ],
+    {
+      libraries: {
+        LibBounties: libBountiesAddr
+      }
+    }
+  );
   const bountiesAddr = await bounties.getAddress();
   console.log(`Bounties: ${bountiesAddr}`);
+
+  const tokenRegistry = await ethers.deployContract("OrgTokenRegistry", [custodian.address]);
+  const tokenRegistryAddr = await tokenRegistry.getAddress();
+  console.log(`Org Token Registry: ${tokenRegistryAddr}`);
+
+  const pointsTokenFactory = await ethers.deployContract("PointsTokenFactory", [
+    custodian.address,
+    notary.address,
+    tokenRegistryAddr,
+    POINTS_TOKEN_FACTORY_DECIMALS,
+    POINTS_TOKEN_FACTORY_TOTAL_SUPPLY,
+    POINTS_TOKEN_FACTORY_FEE
+  ]);
+  const pointsTokenFactoryAddr = await pointsTokenFactory.getAddress();
+  console.log(`Points Token Factory: ${pointsTokenFactoryAddr}`);
+
+  await pointsTokenFactory.connect(custodian).addBountiesContract(bounties);
+
+  // allow the token factory to add supported tokens to the bounties contract
+  await bounties
+    .connect(custodian)
+    .grantRole(await bounties.TRUSTED_CONTRACT_ROLE(), pointsTokenFactory);
+
+  // alow the pointsTokenFactory to register tokens in the registry
+  tokenRegistry
+    .connect(custodian)
+    .grantRole(await tokenRegistry.TRUSTED_CONTRACT_ROLE(), pointsTokenFactoryAddr);
 
   // set a custom fee for the issuer
   await bounties.connect(custodian).setCustomServiceFee(issuer.address, 10);
 
   // write out addresses to a file
   const addresses = {
+    // infra
     bounties: bountiesAddr,
     identity: identityAddress,
+    libBounties: libBountiesAddr,
+    pointsTokenFactory: pointsTokenFactoryAddr,
+    orgTokenRegistry: tokenRegistryAddr,
+
+    // tokens
     usdc: usdcAddress,
     arb: arbAddress,
     weth: wethAddress
