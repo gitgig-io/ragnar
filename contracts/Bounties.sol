@@ -22,7 +22,6 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
       bool enabled;
     }
 
-    // TODO: which fields should be indexed?
     event BountyCreate(
         string platform,
         string repo,
@@ -123,8 +122,6 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
     // store the service fees that have accumulated
     mapping(address => uint256) public fees;
 
-    address[] public supportedTokens;
-
     mapping(address => bool) public isSupportedToken;
 
     // store registered and closed issues. 0 resolvers means registered, 1+ resolvers means closed
@@ -134,6 +131,10 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
     // store bounties by platform, repo, issue and token
     mapping(string => mapping(string => mapping(string => mapping(address => uint256))))
         public bounties;
+
+    // store a list of tokens for each bounty
+    // platformId -> repoId -> issueId -> tokenAddresses[]
+    mapping(string => mapping(string => mapping(string => address[]))) public bountyTokens;
 
     mapping(string platformId => mapping(string repoId => mapping(string issueId => mapping(address tokenContract => mapping(string platformUserId => bool)))))
         public claimed;
@@ -161,7 +162,6 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
         _setRoleAdmin(FINANCE_ROLE, FINANCE_ADMIN_ROLE);
         _setRoleAdmin(TRUSTED_CONTRACT_ROLE, TRUSTED_CONTRACT_ADMIN_ROLE);
         identityContract = _identityContract;
-        supportedTokens = _supportedTokens;
         for (uint256 i = 0; i < _supportedTokens.length; i++) {
             isSupportedToken[_supportedTokens[i]] = true;
 
@@ -193,9 +193,9 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
     }
 
     modifier issueNotClosed(
-        string memory _platform,
-        string memory _repoId,
-        string memory _issueId
+        string calldata _platform,
+        string calldata _repoId,
+        string calldata _issueId
     ) {
         if (resolvers[_platform][_repoId][_issueId].length > 0) {
           revert IssueClosed(_platform, _repoId, _issueId);
@@ -205,13 +205,14 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
     }
 
     modifier unclaimedResolverOnly(
-        string memory _platformId,
-        string memory _repoId,
-        string memory _issueId
+        string calldata _platformId,
+        string calldata _repoId,
+        string calldata _issueId
     ) {
+        address[] storage _bountyTokens = bountyTokens[_platformId][_repoId][_issueId];
         (bool _isResolver, bool _hasUnclaimed) = LibBounties.isUnclaimedResolver(
           identityContract,
-          supportedTokens,
+          _bountyTokens,
           _platformId,
           claimed[_platformId][_repoId][_issueId],
           bounties[_platformId][_repoId][_issueId],
@@ -232,7 +233,7 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
     }
 
     function effectiveServiceFee(address _wallet) public view returns (uint8) {
-      CustomFee memory _customFee = customServiceFees[_wallet]; 
+      CustomFee storage _customFee = customServiceFees[_wallet]; 
       if (_customFee.enabled) {
         return _customFee.fee;
       }
@@ -240,16 +241,12 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
       return serviceFee;
     }
 
-    // TODO: store a list of supported token contracts for each bounty to ensure we
-    // don't need to loop over all tokens for each bounty claim, only those tokens
-    // actually on the bounty.
-
     // TODO: allow for withdrawing arbitrary tokens from the contract to deal with
     // airdropped tokens.
     function postBounty(
-        string memory _platform,
-        string memory _repoId,
-        string memory _issueId,
+        string calldata _platform,
+        string calldata _repoId,
+        string calldata _issueId,
         address _tokenContract,
         uint256 _amount
     )
@@ -265,6 +262,7 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
         // record the number of tokens in the contract allocated to this issue
         uint256 _bountyAmount = _amount - _fee;
         bounties[_platform][_repoId][_issueId][_tokenContract] += _bountyAmount;
+        _addTokenToBountyTokens(_platform, _repoId, _issueId, _tokenContract);
 
         // transfer tokens from the msg sender to this contract and record the bounty amount
         ERC20(_tokenContract).transferFrom(msg.sender, address(this), _amount);
@@ -283,13 +281,26 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
         // TOOD: what if the issue was already closed be we aren't tracking it??? FE could check...
     }
 
+    function _addTokenToBountyTokens(string calldata _platformId, string calldata _repoId, string calldata _issueId, address _tokenContract) private {
+      address[] storage _bountyTokens = bountyTokens[_platformId][_repoId][_issueId];
+
+      for (uint256 i = 0; i < _bountyTokens.length; i++) {
+        if (_bountyTokens[i] == _tokenContract) {
+          return;
+        }
+      }
+
+      // not found, so add it
+      bountyTokens[_platformId][_repoId][_issueId].push(_tokenContract);
+    }
+
     function _validateSignature(
-        string memory _maintainerUserId,
-        string memory _platformId,
-        string memory _repoId,
-        string memory _issueId,
-        string[] memory _resolverIds,
-        bytes memory _signature
+        string calldata _maintainerUserId,
+        string calldata _platformId,
+        string calldata _repoId,
+        string calldata _issueId,
+        string[] calldata _resolverIds,
+        bytes calldata _signature
     ) private view {
         bytes32[] memory _resolvers = new bytes32[](_resolverIds.length);
 
@@ -324,12 +335,12 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
 
     // no need for a nonce here because the maintainer can only claim once
     function maintainerClaim(
-        string memory _maintainerUserId,
-        string memory _platformId,
-        string memory _repoId,
-        string memory _issueId,
-        string[] memory _resolverIds,
-        bytes memory _signature
+        string calldata _maintainerUserId,
+        string calldata _platformId,
+        string calldata _repoId,
+        string calldata _issueId,
+        string[] calldata _resolverIds,
+        bytes calldata _signature
     ) public whenNotPaused issueNotClosed(_platformId, _repoId, _issueId) {
         // lookup maintainer wallet from _maintainerUserId
         address _maintainerAddress = IIdentity(identityContract).ownerOf(
@@ -366,25 +377,26 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
         );
 
         // 3. For each token...
-        for (uint256 index = 0; index < supportedTokens.length; index++) {
+        address[] storage _bountyTokens = bountyTokens[_platformId][_repoId][_issueId];
+        for (uint256 index = 0; index < _bountyTokens.length; index++) {
             // 3a. compute the bounty claim amount for the maintainer
             uint256 amount = maintainerClaimAmount(
                 _platformId,
                 _repoId,
                 _issueId,
-                supportedTokens[index]
+                _bountyTokens[index]
             );
 
             if (amount > 0) {
                 // 3b. transfer tokens to the maintainer
-                ERC20(supportedTokens[index]).transfer(
+                ERC20(_bountyTokens[index]).transfer(
                     _maintainerAddress,
                     amount
                 );
 
                 // 3c. remove the amount from the bounty
                 bounties[_platformId][_repoId][_issueId][
-                    supportedTokens[index]
+                    _bountyTokens[index]
                 ] -= amount;
 
                 emit BountyClaim(
@@ -393,15 +405,14 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
                     _issueId,
                     _maintainerAddress,
                     "maintainer",
-                    supportedTokens[index],
-                    ERC20(supportedTokens[index]).symbol(),
-                    ERC20(supportedTokens[index]).decimals(),
+                    _bountyTokens[index],
+                    ERC20(_bountyTokens[index]).symbol(),
+                    ERC20(_bountyTokens[index]).decimals(),
                     amount
                 );
             }
         }
 
-        // TODO: should this be configurable?
         // 4. auto-claim for contributors
         for (uint256 i = 0; i < _resolverIds.length; i++) {
             _contributorClaim(
@@ -415,9 +426,9 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
 
     // returns the total amount of tokens the maintainer will receive for this bounty
     function maintainerClaimAmount(
-        string memory _platformId,
-        string memory _repoId,
-        string memory _issueId,
+        string calldata _platformId,
+        string calldata _repoId,
+        string calldata _issueId,
         address _token
     ) public view returns (uint256) {
         return
@@ -426,9 +437,9 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
     }
 
     function contributorClaim(
-        string memory _platformId,
-        string memory _repoId,
-        string memory _issueId
+        string calldata _platformId,
+        string calldata _repoId,
+        string calldata _issueId
     )
         public
         whenNotPaused
@@ -436,10 +447,8 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
     {
         for (uint256 i = 0; i < IIdentity(identityContract).balanceOf(msg.sender); i++) {
             // lookup the platformUserId for the resolver
-            PlatformUser memory platformUser;
-
             uint256 _tokenId = IIdentity(identityContract).tokenOfOwnerByIndex(msg.sender, i);
-            platformUser = IIdentity(identityContract).platformUser(_tokenId);
+            PlatformUser memory platformUser = IIdentity(identityContract).platformUser(_tokenId);
 
             if (!LibBounties.eq(platformUser.platformId, _platformId)) {
                 continue;
@@ -450,9 +459,9 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
     }
 
     function _contributorClaim(
-        string memory _platformId,
-        string memory _repoId,
-        string memory _issueId,
+        string calldata _platformId,
+        string calldata _repoId,
+        string calldata _issueId,
         string memory _resolverUserId
     ) private {
         // lookup the wallet for the resolverId
@@ -467,8 +476,9 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
             return;
         }
 
-        for (uint256 i = 0; i < supportedTokens.length; i++) {
-            address _tokenContract = supportedTokens[i];
+        address[] storage _bountyTokens = bountyTokens[_platformId][_repoId][_issueId];
+        for (uint256 i = 0; i < _bountyTokens.length; i++) {
+            address _tokenContract = _bountyTokens[i];
             uint8 _remainingClaims = LibBounties.claimsRemaining(
               bounties[_platformId][_repoId][_issueId],
               claimed[_platformId][_repoId][_issueId],
@@ -515,33 +525,31 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
         }
     }
 
-    function withdrawFees() public onlyRole(FINANCE_ROLE) {
-        for (uint256 i = 0; i < supportedTokens.length; i++) {
-            address _recipient = msg.sender;
-            uint256 _amount = fees[supportedTokens[i]];
+    function withdrawFees(address _tokenContract) public onlyRole(FINANCE_ROLE) {
+        address _recipient = msg.sender;
+        uint256 _amount = fees[_tokenContract];
 
-            if (_amount > 0) {
-                ERC20(supportedTokens[i]).transfer(_recipient, _amount);
-                fees[supportedTokens[i]] -= _amount;
+        if (_amount > 0) {
+            ERC20(_tokenContract).transfer(_recipient, _amount);
+            fees[_tokenContract] -= _amount;
 
-                emit FeeWithdraw(
-                    supportedTokens[i],
-                    ERC20(supportedTokens[i]).symbol(),
-                    ERC20(supportedTokens[i]).decimals(),
-                    _recipient,
-                    _amount
-                );
-            }
+            emit FeeWithdraw(
+              _tokenContract,
+                ERC20(_tokenContract).symbol(),
+                ERC20(_tokenContract).decimals(),
+                _recipient,
+                _amount
+            );
         }
     }
 
     // this takes a list of tokens to sweep to allow for granular sweeps
     // as well as sweeping after a token is no longer supported
     function sweepBounty(
-        string memory _platformId,
-        string memory _repoId,
-        string memory _issueId,
-        address[] memory _tokens
+        string calldata _platformId,
+        string calldata _repoId,
+        string calldata _issueId,
+        address[] calldata _tokens
     ) public onlyRole(FINANCE_ROLE) {
         bool swept = false;
         for (uint256 index = 0; index < _tokens.length; index++) {
@@ -568,6 +576,16 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
                 );
 
                 swept = true;
+
+                // remove from bountyTokens
+                address[] storage _bountyTokens = bountyTokens[_platformId][_repoId][_issueId];
+
+                for (uint256 i = 0; i < _bountyTokens.length; i++) {
+                  if (_bountyTokens[i] == _token) {
+                    _bountyTokens[i] = _bountyTokens[_bountyTokens.length - 1];
+                    _bountyTokens.pop();
+                  }
+                }
             }
         }
 
@@ -577,9 +595,9 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
     }
 
     function isIssueClosed(
-        string memory _platform,
-        string memory _repoId,
-        string memory _issueId
+        string calldata _platform,
+        string calldata _repoId,
+        string calldata _issueId
     ) public view returns (bool) {
         return resolvers[_platform][_repoId][_issueId].length > 0;
     }
@@ -631,12 +649,12 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
         emitConfigChange();
     }
 
+    // TODO: add a test for adding 1k tokens and test the gas fees
     function addToken(address _newToken) public onlyRoles(CUSTODIAN_ROLE, TRUSTED_CONTRACT_ROLE) {
         if (isSupportedToken[_newToken]) {
             revert TokenSupportError(_newToken, true);
         }
 
-        supportedTokens.push(_newToken);
         isSupportedToken[_newToken] = true;
 
         emit TokenSupportChange(
@@ -650,12 +668,6 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
     function removeToken(address _removeToken) public onlyRoles(CUSTODIAN_ROLE, TRUSTED_CONTRACT_ROLE) {
         if (!isSupportedToken[_removeToken]) {
             revert TokenSupportError(_removeToken, false);
-        }
-
-        for (uint256 i = 0; i < supportedTokens.length; i++) {
-            if (supportedTokens[i] == _removeToken) {
-                delete supportedTokens[i];
-            }
         }
 
         isSupportedToken[_removeToken] = false;

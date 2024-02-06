@@ -280,6 +280,19 @@ describe("Bounties", () => {
       expect(await usdc.balanceOf(await bounties.getAddress())).to.be.eq(amount);
       expect(await bounties.fees(await usdc.getAddress())).to.be.eq(expectedFee);
     });
+
+    it("should add token to bountyTokens list", async () => {
+      const { bounties, issuer, usdc } = await bountiesFixture();
+      const amount = 5;
+
+      // when
+      await usdc.connect(issuer).approve(await bounties.getAddress(), amount);
+      await bounties.connect(issuer).postBounty("1", "gitgig-io/ragnar", "123", await usdc.getAddress(), amount);
+
+      // then
+      // ensure the smart contract has the tokens now
+      expect(await bounties.bountyTokens("1", "gitgig-io/ragnar", "123", 0)).to.be.eq(await usdc.getAddress());
+    });
   });
 
   describe("MaintainerClaim", () => {
@@ -742,7 +755,7 @@ describe("Bounties", () => {
       await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, usdc });
 
       // when
-      await bounties.connect(finance).withdrawFees();
+      await bounties.connect(finance).withdrawFees(await usdc.getAddress());
 
       // then
       const expectedFee = await serviceFee(bounties, amount);
@@ -755,7 +768,7 @@ describe("Bounties", () => {
       await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, usdc });
 
       // when
-      await bounties.connect(finance).withdrawFees();
+      await bounties.connect(finance).withdrawFees(await usdc.getAddress());
 
       // then
       expect(await bounties.fees(await usdc.getAddress())).to.be.eq(0);
@@ -767,7 +780,7 @@ describe("Bounties", () => {
       await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, usdc });
 
       // when/then
-      await expect(bounties.connect(issuer).withdrawFees())
+      await expect(bounties.connect(issuer).withdrawFees(await usdc.getAddress()))
         .to.be.revertedWithCustomError(bounties, "AccessControlUnauthorizedAccount");
     });
 
@@ -778,7 +791,7 @@ describe("Bounties", () => {
       const expectedFee = await serviceFee(bounties, amount);
 
       // when / then
-      await expect(bounties.connect(finance).withdrawFees())
+      await expect(bounties.connect(finance).withdrawFees(await usdc.getAddress()))
         .to.emit(bounties, "FeeWithdraw")
         .withArgs(
           await usdc.getAddress(),
@@ -790,8 +803,8 @@ describe("Bounties", () => {
     });
 
     it('should not emit FeeWithdraw event when no fees', async () => {
-      const { bounties, finance } = await claimableLinkedBountyFixture();
-      await expect(bounties.connect(finance).withdrawFees())
+      const { bounties, finance, usdc } = await claimableLinkedBountyFixture();
+      await expect(bounties.connect(finance).withdrawFees(usdc.getAddress()))
         .to.not.emit(bounties, "FeeWithdraw");
     });
   });
@@ -1183,21 +1196,6 @@ describe("Bounties", () => {
       expect(txn.hash).to.be.a.string;
     });
 
-    it('should update supported token array', async () => {
-      const { bounties, custodian, issuer, usdc, arb, weth } = await bountiesFixture();
-      const usdc2 = await usdcFixture(issuer);
-      const usdc2Addr = await usdc2.getAddress();
-
-      // when
-      await bounties.connect(custodian).addToken(usdc2Addr);
-
-      // then
-      expect(await bounties.supportedTokens(0)).to.be.eq(await usdc.getAddress());
-      expect(await bounties.supportedTokens(1)).to.be.eq(await arb.getAddress());
-      expect(await bounties.supportedTokens(2)).to.be.eq(await weth.getAddress());
-      expect(await bounties.supportedTokens(3)).to.be.eq(usdc2Addr);
-    });
-
     it('should update supported token map', async () => {
       const { bounties, custodian, issuer, usdc, arb, weth } = await bountiesFixture();
       const usdc2 = await usdcFixture(issuer);
@@ -1257,16 +1255,6 @@ describe("Bounties", () => {
 
       // then
       expect(txn.hash).to.be.a.string;
-    });
-
-    it('should update supported token array', async () => {
-      const { bounties, custodian, usdc } = await bountiesFixture();
-
-      // when
-      await bounties.connect(custodian).removeToken(await usdc.getAddress());
-
-      // then
-      expect(await bounties.supportedTokens(0)).to.be.eq(ethers.ZeroAddress);
     });
 
     it('should update supported token map', async () => {
@@ -1452,6 +1440,18 @@ describe("Bounties", () => {
       await expect(bounties.connect(finance).sweepBounty("1", "gitgig-io/ragnar", "123", [usdcAddr]))
         .to.be.revertedWithCustomError(bounties, "NoBounty")
         .withArgs(platformId, repoId, issueId, [usdcAddr]);
+    });
+
+    it('should remove the token from bountyTokens', async () => {
+      const { bounties, finance, usdc, bountyAmount, platformId, repoId, issueId, supportedTokens } = await sweepableBountyFixture();
+      expect(supportedTokens.length).to.equal(1);
+      expect(await bounties.bountyTokens(platformId, repoId, issueId, 0)).to.not.equal(ethers.ZeroAddress);
+
+      // when
+      await bounties.connect(finance).sweepBounty(platformId, repoId, issueId, supportedTokens);
+
+      // then
+      await expect(bounties.bountyTokens(platformId, repoId, issueId, 0)).to.be.reverted;
     });
   });
 });

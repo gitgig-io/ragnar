@@ -29,8 +29,14 @@ const config: HardhatUserConfig = {
     settings: {
       optimizer: {
         enabled: true,
+        details: {
+          yulDetails: {
+            optimizerSteps: "u",
+          }
+        },
         runs: 200
-      }
+      },
+      viaIR: true
     }
   },
   networks: {

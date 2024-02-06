@@ -94,8 +94,8 @@ contract Identity is
     }
 
     function _validateNonce(
-        string memory _platformId,
-        string memory _platformUserId,
+        string calldata _platformId,
+        string calldata _platformUserId,
         uint16 _nonce
     ) private {
         uint16 _expectedNonce = lastNonceForPlatformUser[_platformId][_platformUserId] + 1;
@@ -109,11 +109,11 @@ contract Identity is
 
     function _validateLinkSignature(
         address _userAddress,
-        string memory _platformId,
-        string memory _platformUserId,
-        string memory _platformUsername,
+        string calldata _platformId,
+        string calldata _platformUserId,
+        string calldata _platformUsername,
         uint16 _nonce,
-        bytes memory _signature
+        bytes calldata _signature
     ) private view {
         bytes32 _digest = _hashTypedDataV4(
           keccak256(
@@ -137,11 +137,11 @@ contract Identity is
 
     function mint(
         address _userAddress,
-        string memory _platformId,
-        string memory _platformUserId,
-        string memory _platformUsername,
+        string calldata _platformId,
+        string calldata _platformUserId,
+        string calldata _platformUsername,
         uint16 _nonce,
-        bytes memory _signature
+        bytes calldata _signature
     ) public whenNotPaused {
         // ensure token has not already been minted for this platform user
         if (tokenIdForPlatformUser[_platformId][_platformUserId] != 0) {
@@ -183,11 +183,11 @@ contract Identity is
 
     function transfer(
         address _userAddress,
-        string memory _platformId,
-        string memory _platformUserId,
-        string memory _platformUsername,
+        string calldata _platformId,
+        string calldata _platformUserId,
+        string calldata _platformUsername,
         uint16 _nonce,
-        bytes memory _signature
+        bytes calldata _signature
     ) public whenNotPaused {
         _validateNonce(_platformId, _platformUserId, _nonce);
 
@@ -223,7 +223,7 @@ contract Identity is
         );
     }
 
-    function ownerOf(string memory _platformId, string memory _platformUserId) override public view returns (address) {
+    function ownerOf(string calldata _platformId, string calldata _platformUserId) override public view returns (address) {
       uint256 _tokenId = tokenIdForPlatformUser[_platformId][_platformUserId];
       return _ownerOf(_tokenId);
     }
@@ -263,7 +263,7 @@ contract Identity is
         emit ConfigChange(notary, baseUri);
     }
 
-    function setBaseUri(string memory _newBaseUri)
+    function setBaseUri(string calldata _newBaseUri)
         public
         onlyRole(CUSTODIAN_ROLE)
     {

@@ -7,7 +7,6 @@ import { OrgTokenRegistry, PointsTokenFactory } from "../typechain-types";
 
 const TOTAL_SUPPLY = 20_000_000;
 const DECIMALS = 2;
-// TODO: is this 0.2 eth?
 const FEE = ethers.WeiPerEther / ethers.toBigInt(5);
 
 describe("PointsTokenFactory", () => {
@@ -121,11 +120,17 @@ describe("PointsTokenFactory", () => {
 
 
     it("should register token as a supported token on bounties contract", async () => {
-      const { bounties, pointsFactory, issuer, notary } = await cpFixture();
-      await expect(bounties.supportedTokens(0)).to.be.reverted;
+      const { bounties, pointsFactory, issuer, notary, registry } = await cpFixture();
+      let tokenAddr = await registry.getContract("1", "GitGig", "cpTST");
+      expect(tokenAddr).to.equal(ethers.ZeroAddress);
 
+      // when
       await createPointsToken(pointsFactory, issuer, notary);
-      expect(await bounties.supportedTokens(0)).to.not.equal(ethers.ZeroAddress);
+
+      // then
+      tokenAddr = await registry.getContract("1", "GitGig", "cpTST");
+      expect(tokenAddr).to.not.equal(ethers.ZeroAddress);
+      expect(await bounties.isSupportedToken(tokenAddr)).to.be.true;
     });
 
     it("should emit PointsTokenCreated event", async () => {

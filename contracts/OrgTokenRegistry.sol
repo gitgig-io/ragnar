@@ -5,7 +5,6 @@ pragma solidity ^0.8.20;
 import {AccessControlDefaultAdminRules} from "@openzeppelin/contracts/access/extensions/AccessControlDefaultAdminRules.sol";
 import {IOrgTokenRegistry} from "./IOrgTokenRegistry.sol";
 
-// TODO: write tests
 contract OrgTokenRegistry is IOrgTokenRegistry, AccessControlDefaultAdminRules {
     // platformId -> org -> symbol -> address
     mapping(string => mapping(string => mapping(string => address)))
