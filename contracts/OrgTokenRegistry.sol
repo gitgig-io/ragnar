@@ -21,7 +21,7 @@ contract OrgTokenRegistry is IOrgTokenRegistry, AccessControlDefaultAdminRules {
         string platformId,
         string org,
         string symbol,
-        address existing
+        address token
     );
 
     bytes32 public constant TRUSTED_CONTRACT_ADMIN_ROLE =
