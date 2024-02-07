@@ -56,7 +56,8 @@ contract PointsTokenFactory is
         uint8 decimals,
         uint256 totalSupply,
         address[] bountiesContracts,
-        address registry
+        address registry,
+        address notary
     );
 
     event FeeWithdraw(address recipient, uint256 amount);
@@ -85,6 +86,8 @@ contract PointsTokenFactory is
         dec = _decimals;
         totalSupply = _totalSupply;
         fee = _fee;
+
+        emitConfigChange();
     }
 
     function createPointsToken(
@@ -217,6 +220,11 @@ contract PointsTokenFactory is
         emitConfigChange();
     }
 
+    function setNotary(address _notary) public onlyRole(CUSTODIAN_ROLE) {
+        _setNotary(_notary);
+        emitConfigChange();
+    }
+
     function addBountiesContract(address _bounties)
         public
         onlyRole(CUSTODIAN_ROLE)
@@ -268,6 +276,13 @@ contract PointsTokenFactory is
     }
 
     function emitConfigChange() private {
-        emit ConfigChange(fee, dec, totalSupply, bountiesContracts, registry);
+        emit ConfigChange(
+            fee,
+            dec,
+            totalSupply,
+            bountiesContracts,
+            registry,
+            notary
+        );
     }
 }

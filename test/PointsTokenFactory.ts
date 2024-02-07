@@ -409,6 +409,30 @@ describe("PointsTokenFactory", () => {
     });
   });
 
+  describe("Set Notary", () => {
+    // TODO: add tests for setting notary
+    it("should update notary", async () => {
+      const { pointsFactory, custodian, issuer } = await pFixture();
+
+      await pointsFactory.connect(custodian).setNotary(issuer.address);
+      expect(await pointsFactory.notary()).to.equal(issuer.address);
+    });
+
+    it("should revert when called by non-custodian", async () => {
+      const { pointsFactory, issuer, notary } = await pFixture();
+      await expect(pointsFactory.connect(issuer).setNotary(issuer.address))
+        .to.be.revertedWithCustomError(pointsFactory, "AccessControlUnauthorizedAccount");
+      expect(await pointsFactory.notary()).to.equal(notary.address);
+    });
+
+    it("should emit ConfigChange event", async () => {
+      const { pointsFactory, custodian, issuer } = await pFixture();
+
+      await expect(pointsFactory.connect(custodian).setNotary(issuer.address))
+        .to.emit(pointsFactory, "ConfigChange");
+    });
+  });
+
   describe("Withdraw Fees", () => {
     it("should withdraw all fees", async () => {
       const { pointsFactory, issuer, notary, finance } = await pFixture();
