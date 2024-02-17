@@ -344,13 +344,13 @@
       {
         "indexed": false,
         "internalType": "address",
-        "name": "minter",
+        "name": "creator",
         "type": "address"
       },
       {
         "indexed": false,
         "internalType": "string",
-        "name": "platformId",
+        "name": "platform",
         "type": "string"
       },
       {
@@ -360,7 +360,7 @@
         "type": "string"
       }
     ],
-    "name": "PointsTokenCreated",
+    "name": "PointsTokenCreate",
     "type": "event"
   },
   {

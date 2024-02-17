@@ -32,7 +32,7 @@ contract PointsTokenFactory is
 
     bytes32 private constant TYPE_HASH =
         keccak256(
-            "CreatePointsToken(string name,string symbol,string platformId,string org,address creator)"
+            "CreatePointsToken(string name,string symbol,string platform,string org,address creator)"
         );
 
     error InvalidSignature();
@@ -40,14 +40,14 @@ contract PointsTokenFactory is
     error InvalidArgument();
     error WrongFeeAmount(uint256);
 
-    event PointsTokenCreated(
+    event PointsTokenCreate(
         address pToken,
         string name,
         string symbol,
         uint8 decimals,
         uint256 totalSupply,
-        address minter,
-        string platformId,
+        address creator,
+        string platform,
         string org
     );
 
@@ -121,7 +121,7 @@ contract PointsTokenFactory is
         // this will fail if the symbol already exists in the org
         IOrgTokenRegistry(registry).add(_platformId, _org, _symbol, _pToken);
 
-        emit PointsTokenCreated(
+        emit PointsTokenCreate(
             _pToken,
             _name,
             _symbol,

@@ -85,7 +85,7 @@ export async function createPointsTokenSignature(cpFactory: PointsTokenFactory, 
     CreatePointsToken: [
       { name: "name", type: "string" },
       { name: "symbol", type: "string" },
-      { name: "platformId", type: "string" },
+      { name: "platform", type: "string" },
       { name: "org", type: "string" },
       { name: "creator", type: "address" },
     ]
@@ -94,7 +94,7 @@ export async function createPointsTokenSignature(cpFactory: PointsTokenFactory, 
   const values: Record<string, any> = {
     name: params[0] as string,
     symbol: params[1] as string,
-    platformId: params[2] as string,
+    platform: params[2] as string,
     org: params[3] as string,
     creator: params[4] as string,
   };

@@ -132,10 +132,10 @@ describe("PointsTokenFactory", () => {
       expect(await bounties.isSupportedToken(tokenAddr)).to.be.true;
     });
 
-    it("should emit PointsTokenCreated event", async () => {
+    it("should emit PointsTokenCreate event", async () => {
       const { pointsFactory, issuer, notary } = await pFixture();
       await expect(createPointsToken(pointsFactory, issuer, notary))
-        .to.emit(pointsFactory, "PointsTokenCreated")
+        .to.emit(pointsFactory, "PointsTokenCreate")
         .withArgs(
           anyValue,
           "Test Points",
