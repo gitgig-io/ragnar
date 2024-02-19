@@ -16,15 +16,7 @@ describe("PointsTokenFactory", () => {
     const IdentityFactory = await ethers.getContractFactory("Identity");
     const identity = await IdentityFactory.deploy(custodian.address, notary.address, "http://localhost:3000");
 
-    const LibBountiesFactory = await ethers.getContractFactory("LibBounties");
-    const libBounties = await LibBountiesFactory.deploy();
-
-    const BountiesFactory = await ethers.getContractFactory("Bounties", {
-      libraries: {
-        LibBounties: await libBounties.getAddress()
-      }
-    });
-
+    const BountiesFactory = await ethers.getContractFactory("Bounties");
     const bounties = await BountiesFactory.deploy(
       custodian.address,
       finance.address,
@@ -33,7 +25,7 @@ describe("PointsTokenFactory", () => {
       []
     );
 
-    return { owner, custodian, bounties, libBounties, identity, finance, notary, issuer, maintainer, contributor, contributor2, contributor3 };
+    return { owner, custodian, bounties, identity, finance, notary, issuer, maintainer, contributor, contributor2, contributor3 };
   }
 
   async function createOrgTokenRegistry(custodian: HardhatEthersSigner) {
@@ -51,7 +43,7 @@ describe("PointsTokenFactory", () => {
   }
 
   async function pFixture() {
-    const { owner, custodian, bounties, libBounties, identity, finance, notary, issuer, maintainer, contributor, contributor2, contributor3 } = await bountiesFixture();
+    const { owner, custodian, bounties, identity, finance, notary, issuer, maintainer, contributor, contributor2, contributor3 } = await bountiesFixture();
 
     const registry = await createOrgTokenRegistry(custodian);
 
@@ -66,7 +58,7 @@ describe("PointsTokenFactory", () => {
       .connect(custodian)
       .grantRole(await registry.TRUSTED_CONTRACT_ROLE(), pointsFactory.getAddress());
 
-    return { owner, custodian, bounties, libBounties, identity, pointsFactory, registry, finance, notary, issuer, maintainer, contributor, contributor2, contributor3 };
+    return { owner, custodian, bounties, identity, pointsFactory, registry, finance, notary, issuer, maintainer, contributor, contributor2, contributor3 };
   }
 
   const BASE_PARAMS = ["Test Points", "pTST", "1", "GitGig"] as const;

@@ -52,24 +52,13 @@ async function main() {
   const identityAddress = await identity.getAddress();
   console.log(`Identity: ${identityAddress}`);
 
-  const libBounties = await ethers.deployContract("LibBounties");
-  const libBountiesAddr = await libBounties.getAddress();
-  console.log(`Lib Bounties: ${libBountiesAddr}`);
-
-  const bounties = await ethers.deployContract("Bounties",
-    [
-      custodian.address,
-      finance.address,
-      notary.address,
-      await identity.getAddress(),
-      [usdcAddress, arbAddress, wethAddress]
-    ],
-    {
-      libraries: {
-        LibBounties: libBountiesAddr
-      }
-    }
-  );
+  const bounties = await ethers.deployContract("Bounties", [
+    custodian.address,
+    finance.address,
+    notary.address,
+    await identity.getAddress(),
+    [usdcAddress, arbAddress, wethAddress]
+  ]);
   const bountiesAddr = await bounties.getAddress();
   console.log(`Bounties: ${bountiesAddr}`);
 
@@ -109,7 +98,6 @@ async function main() {
     // infra
     bounties: bountiesAddr,
     identity: identityAddress,
-    libBounties: libBountiesAddr,
     pointsTokenFactory: pointsTokenFactoryAddr,
     orgTokenRegistry: tokenRegistryAddr,
 

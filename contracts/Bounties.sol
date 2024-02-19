@@ -9,7 +9,6 @@ import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {AccessControlDefaultAdminRules} from "@openzeppelin/contracts/access/extensions/AccessControlDefaultAdminRules.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {IIdentity, PlatformUser} from "./IIdentity.sol";
-import {LibBounties} from "./LibBounties.sol";
 import {ITokenSupportable} from "./ITokenSupportable.sol";
 import {Notarizable} from "./Notarizable.sol";
 
@@ -91,6 +90,7 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
 
     error AlreadyClaimed(string platformId, string repoId, string issueId, address claimer);
     error IdentityNotFound(string platformId, string platformUserId);
+    error InvalidFee(uint8 fee);
     error InvalidResolver(string platformId, string repoId, string issueId, address claimer);
     error InvalidSignature();
     error IssueClosed(string platformId, string repoId, string issueId);
@@ -210,7 +210,7 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
         string calldata _issueId
     ) {
         address[] storage _bountyTokens = bountyTokens[_platformId][_repoId][_issueId];
-        (bool _isResolver, bool _hasUnclaimed) = LibBounties.isUnclaimedResolver(
+        (bool _isResolver, bool _hasUnclaimed) = _isUnclaimedResolver(
           identityContract,
           _bountyTokens,
           _platformId,
@@ -450,7 +450,7 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
             uint256 _tokenId = IIdentity(identityContract).tokenOfOwnerByIndex(msg.sender, i);
             PlatformUser memory platformUser = IIdentity(identityContract).platformUser(_tokenId);
 
-            if (!LibBounties.eq(platformUser.platformId, _platformId)) {
+            if (!_eq(platformUser.platformId, _platformId)) {
                 continue;
             }
 
@@ -479,7 +479,7 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
         address[] storage _bountyTokens = bountyTokens[_platformId][_repoId][_issueId];
         for (uint256 i = 0; i < _bountyTokens.length; i++) {
             address _tokenContract = _bountyTokens[i];
-            uint8 _remainingClaims = LibBounties.claimsRemaining(
+            uint8 _remainingClaims = _claimsRemaining(
               bounties[_platformId][_repoId][_issueId],
               claimed[_platformId][_repoId][_issueId],
               resolvers[_platformId][_repoId][_issueId],
@@ -612,7 +612,7 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
     }
 
     function setIdentity(address _newIdentity) public onlyRole(CUSTODIAN_ROLE) {
-        LibBounties.validateAddress(_newIdentity);
+        _validateAddress(_newIdentity);
         identityContract = _newIdentity;
         emitConfigChange();
     }
@@ -621,7 +621,7 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
         public
         onlyRole(CUSTODIAN_ROLE)
     {
-        LibBounties.validateFee(_newServiceFee);
+        _validateFee(_newServiceFee);
         serviceFee = _newServiceFee;
         emitConfigChange();
     }
@@ -630,7 +630,7 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
         public
         onlyRole(CUSTODIAN_ROLE)
     {
-        LibBounties.validateFee(_newServiceFee);
+        _validateFee(_newServiceFee);
         if (_newServiceFee == serviceFee) {
           delete customServiceFees[_wallet];
           emit CustomFeeChange(_wallet, "service", _newServiceFee, false);
@@ -644,7 +644,7 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
         public
         onlyRole(CUSTODIAN_ROLE)
     {
-        LibBounties.validateFee(_newMaintainerFee);
+        _validateFee(_newMaintainerFee);
         maintainerFee = _newMaintainerFee;
         emitConfigChange();
     }
@@ -686,5 +686,108 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
 
     function unpause() public onlyRole(CUSTODIAN_ROLE) {
         _unpause();
+    }
+
+    // library functions
+
+    function _eq(string memory a, string memory b) private pure returns (bool) {
+        return keccak256(bytes(a)) == keccak256(bytes(b));
+    }
+
+    // TODO: maybe change param order?
+    function _isUnclaimedResolver(
+        address _identityContract,
+        address[] storage _supportedTokens,
+        string memory _platformId,
+        mapping(address => mapping(string => bool)) storage _claimed,
+        mapping(address => uint256) storage _bounties,
+        string[] storage _resolvers
+    ) private view returns (bool, bool) {
+        bool _hasUnclaimed = false;
+        bool _isResolver = false;
+
+        // need to check all of their identities
+        for (
+            uint256 i = 0;
+            i < IIdentity(_identityContract).balanceOf(msg.sender);
+            i++
+        ) {
+            // lookup the platformUserId for the resolver
+            uint256 _tokenId = IIdentity(_identityContract).tokenOfOwnerByIndex(
+                msg.sender,
+                i
+            );
+            PlatformUser memory platformUser = IIdentity(_identityContract)
+                .platformUser(_tokenId);
+
+            // skip this platformUser if it's not for this platform
+            if (!_eq(platformUser.platformId, _platformId)) {
+                continue;
+            }
+
+            // make sure they have an unclaimed bounty
+            for (uint256 j = 0; j < _supportedTokens.length; j++) {
+                if (
+                    !_claimed[_supportedTokens[j]][platformUser.userId] &&
+                    _bounties[_supportedTokens[j]] > 0
+                ) {
+                    _hasUnclaimed = true;
+                    break;
+                }
+            }
+
+            // make sure they are a resolver
+            for (uint256 k = 0; k < _resolvers.length; k++) {
+                string memory _resolverUserId = _resolvers[k];
+
+                if (_eq(_resolverUserId, platformUser.userId)) {
+                    _isResolver = true;
+                    break;
+                }
+            }
+
+            if (_isResolver && _hasUnclaimed) {
+                break;
+            }
+        }
+
+        return (_isResolver, _hasUnclaimed);
+    }
+
+    function _claimsRemaining(
+        mapping(address => uint256) storage _bounties,
+        mapping(address => mapping(string => bool)) storage _claimed,
+        string[] storage _resolvers,
+        address _tokenContract
+    ) private view returns (uint8) {
+        uint256 _amount = _bounties[_tokenContract];
+
+        if (_amount < 1) {
+            return 0;
+        }
+
+        uint8 _remaining = 0;
+
+        for (uint256 k = 0; k < _resolvers.length; k++) {
+            string memory _resolverUserId = _resolvers[k];
+
+            if (_claimed[_tokenContract][_resolverUserId] == false) {
+                _remaining++;
+            }
+        }
+
+        return _remaining;
+    }
+
+    function _validateAddress(address _address) private pure {
+        if (_address == address(0)) {
+            revert InvalidAddress(_address);
+        }
+    }
+
+    function _validateFee(uint8 _fee) private pure {
+        if (_fee < 0 || _fee > 100) {
+            revert InvalidFee(_fee);
+        }
     }
 }
