@@ -1413,6 +1413,16 @@ describe("Bounties", () => {
       ).to.be.revertedWithCustomError(bounties, "TimeframeError");
     });
 
+    it('should revert when paused', async () => {
+      const { bounties, custodian, finance, platformId, repoId, issueId, supportedTokens } = await sweepableBountyAfterReclaimFixture();
+      await bounties.connect(custodian).pause();
+
+      // when/then
+      await expect(bounties
+        .connect(finance)
+        .sweepBounty(platformId, repoId, issueId, supportedTokens)
+      ).to.revertedWithCustomError(bounties, 'EnforcedPause');
+    });
 
     it('should zero out bounty', async () => {
       const { bounties, finance, usdc, platformId, repoId, issueId, supportedTokens } = await sweepableBountyAfterReclaimFixture();

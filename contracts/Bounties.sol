@@ -114,7 +114,6 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
     bytes32 public constant FINANCE_ADMIN_ROLE =
         keccak256("FINANCE_ADMIN_ROLE");
     bytes32 public constant FINANCE_ROLE = keccak256("FINANCE_ROLE");
-    // TODO: do we need an admin for this? should it be custodian?
     bytes32 public constant TRUSTED_CONTRACT_ADMIN_ROLE = keccak256("TRUSTED_CONTRACT_ADMIN_ROLE");
     bytes32 public constant TRUSTED_CONTRACT_ROLE = keccak256("TRUSTED_CONTRACT_ROLE");
 
@@ -269,8 +268,6 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
       return serviceFee;
     }
 
-    // TODO: allow for withdrawing arbitrary tokens from the contract to deal with
-    // airdropped tokens.
     function postBounty(
         string calldata _platform,
         string calldata _repoId,
@@ -624,10 +621,6 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
 
     // this takes a list of tokens to sweep to allow for granular sweeps
     // as well as sweeping after a token is no longer supported
-    // TODO: add tests 
-    // TEST: ensure can't be called when paused
-    // TEST: ensure can't be called before reclaim window
-    // TEST: ensure can't be called during reclaim window
     function sweepBounty(
         string calldata _platformId,
         string calldata _repoId,
