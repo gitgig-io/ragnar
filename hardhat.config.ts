@@ -34,7 +34,7 @@ const config: HardhatUserConfig = {
             optimizerSteps: "u",
           }
         },
-        runs: 200
+        runs: 100
       },
       viaIR: true
     }

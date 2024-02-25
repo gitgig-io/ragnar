@@ -19,6 +19,7 @@
   "license": "ISC",
   "devDependencies": {
     "@nibbstack/erc721-validator": "^0.3.0",
+    "@nomicfoundation/hardhat-network-helpers": "^1.0.10",
     "@nomicfoundation/hardhat-toolbox": "^3.0.0",
     "@nomiclabs/hardhat-web3": "^2.0.0",
     "@types/chai": "^4.3.6",

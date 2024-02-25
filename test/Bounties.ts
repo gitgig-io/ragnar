@@ -2,6 +2,7 @@ import { expect } from "chai";
 import { ethers } from "hardhat";
 import { maintainerClaimSignature, mintSignature } from "./helpers/signatureHelpers";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { time } from "@nomicfoundation/hardhat-network-helpers";
 import { Bounties, Identity, TestERC20 } from "../typechain-types";
 
 const BIG_SUPPLY = ethers.toBigInt("1000000000000000000000000000");
@@ -1372,8 +1373,17 @@ describe("Bounties", () => {
       return { ...fixtures, amount, serviceFee, bountyAmount, platformId, repoId, issueId, supportedTokens };
     }
 
-    it('should sweep a bounty', async () => {
-      const { bounties, finance, platformId, repoId, issueId, supportedTokens } = await sweepableBountyFixture();
+    const RECLAIM_TIMEFRAME = 60 * 60 * 24 * (365 + 1);
+    const SWEEP_TIMEFRAME = 60 * 60 * 24 * (365 + 90);
+
+    async function sweepableBountyAfterReclaimFixture() {
+      const fixtures = await sweepableBountyFixture();
+      await time.increase(SWEEP_TIMEFRAME);
+      return fixtures;
+    }
+
+    it('should sweep a bounty when required timeframe has passed', async () => {
+      const { bounties, finance, platformId, repoId, issueId, supportedTokens } = await sweepableBountyAfterReclaimFixture();
 
       // when
       const txn = await bounties.connect(finance).sweepBounty(platformId, repoId, issueId, supportedTokens);
@@ -1382,8 +1392,30 @@ describe("Bounties", () => {
       expect(txn.hash).to.be.a.string;
     });
 
+    it('should revert when before reclaim timeframe', async () => {
+      const { bounties, finance, platformId, repoId, issueId, supportedTokens } = await sweepableBountyFixture();
+
+      // when/then
+      await expect(bounties
+        .connect(finance)
+        .sweepBounty(platformId, repoId, issueId, supportedTokens)
+      ).to.be.revertedWithCustomError(bounties, "TimeframeError");
+    });
+
+    it('should revert when during reclaim timeframe', async () => {
+      const { bounties, finance, platformId, repoId, issueId, supportedTokens } = await sweepableBountyFixture();
+      time.increase(RECLAIM_TIMEFRAME);
+
+      // when/then
+      await expect(bounties
+        .connect(finance)
+        .sweepBounty(platformId, repoId, issueId, supportedTokens)
+      ).to.be.revertedWithCustomError(bounties, "TimeframeError");
+    });
+
+
     it('should zero out bounty', async () => {
-      const { bounties, finance, usdc, platformId, repoId, issueId, supportedTokens } = await sweepableBountyFixture();
+      const { bounties, finance, usdc, platformId, repoId, issueId, supportedTokens } = await sweepableBountyAfterReclaimFixture();
 
       // when
       await bounties.connect(finance).sweepBounty(platformId, repoId, issueId, supportedTokens);
@@ -1393,7 +1425,7 @@ describe("Bounties", () => {
     });
 
     it('should transfer bounty tokens to message sender', async () => {
-      const { bounties, finance, usdc, bountyAmount, platformId, repoId, issueId, supportedTokens } = await sweepableBountyFixture();
+      const { bounties, finance, usdc, bountyAmount, platformId, repoId, issueId, supportedTokens } = await sweepableBountyAfterReclaimFixture();
 
       // when
       await bounties.connect(finance).sweepBounty(platformId, repoId, issueId, supportedTokens);
@@ -1403,7 +1435,7 @@ describe("Bounties", () => {
     });
 
     it('should emit BountySweep event', async () => {
-      const { bounties, finance, usdc, bountyAmount, platformId, repoId, issueId, supportedTokens } = await sweepableBountyFixture();
+      const { bounties, finance, usdc, bountyAmount, platformId, repoId, issueId, supportedTokens } = await sweepableBountyAfterReclaimFixture();
 
       // when/then
       await expect(bounties.connect(finance).sweepBounty(platformId, repoId, issueId, supportedTokens))
@@ -1413,7 +1445,7 @@ describe("Bounties", () => {
 
 
     it('should revert if not called by finance', async () => {
-      const { bounties, issuer, platformId, repoId, issueId, supportedTokens } = await sweepableBountyFixture();
+      const { bounties, issuer, platformId, repoId, issueId, supportedTokens } = await sweepableBountyAfterReclaimFixture();
 
       // when/then
       await expect(bounties.connect(issuer).sweepBounty(platformId, repoId, issueId, supportedTokens))
@@ -1426,6 +1458,7 @@ describe("Bounties", () => {
       const repoId = "gitgig-io/ragnar";
       const issueId = "123";
       const usdcAddr = await usdc.getAddress();
+      await time.increase(SWEEP_TIMEFRAME);
 
       await expect(bounties.connect(finance).sweepBounty("1", "gitgig-io/ragnar", "123", [usdcAddr]))
         .to.be.revertedWithCustomError(bounties, "NoBounty")
@@ -1433,7 +1466,7 @@ describe("Bounties", () => {
     });
 
     it('should remove the token from bountyTokens', async () => {
-      const { bounties, finance, platformId, repoId, issueId, supportedTokens } = await sweepableBountyFixture();
+      const { bounties, finance, platformId, repoId, issueId, supportedTokens } = await sweepableBountyAfterReclaimFixture();
       expect(supportedTokens.length).to.equal(1);
       expect(await bounties.bountyTokens(platformId, repoId, issueId, 0)).to.not.equal(ethers.ZeroAddress);
 
@@ -1442,6 +1475,223 @@ describe("Bounties", () => {
 
       // then
       await expect(bounties.bountyTokens(platformId, repoId, issueId, 0)).to.be.reverted;
+    });
+  });
+
+  describe('ReclaimBounty', () => {
+    async function reclaimableBountyFixture() {
+      const fixtures = await bountiesFixture();
+      const { bounties, issuer, usdc } = fixtures;
+
+      const platformId = "1";
+      const repoId = "gitgig-io/ragnar";
+      const issueId = "123";
+      const amount = 100;
+
+      const serviceFee = ethers.toNumber(await bounties.serviceFee()) * amount / 100;
+      const bountyAmount = amount - serviceFee;
+      await usdc.connect(issuer).approve(await bounties.getAddress(), amount);
+      await bounties.connect(issuer).postBounty(platformId, repoId, issueId, await usdc.getAddress(), amount);
+      expect(await bounties.bounties(platformId, repoId, issueId, await usdc.getAddress())).to.equal(bountyAmount);
+      const issuedToken = await usdc.getAddress();
+
+      return { ...fixtures, amount, serviceFee, bountyAmount, platformId, repoId, issueId, issuedToken };
+    }
+
+    const RECLAIM_TIMEFRAME = 60 * 60 * 24 * (365 + 1);
+
+    async function reclaimableBountyAfterReclaimAvailableFixture() {
+      const fixtures = await reclaimableBountyFixture();
+      await time.increase(RECLAIM_TIMEFRAME);
+      return fixtures;
+    }
+
+    it('should revert when reclaiming before required timeframe', async () => {
+      const { bounties, issuer, platformId, repoId, issueId, issuedToken } = await reclaimableBountyFixture();
+
+      // when/then
+      await expect(bounties
+        .connect(issuer)
+        .reclaim(platformId, repoId, issueId, issuedToken)
+      ).to.revertedWithCustomError(bounties, 'TimeframeError');
+    });
+
+    it('should reclaim after required timeframe', async () => {
+      const { bounties, issuer, platformId, repoId, issueId, issuedToken } = await reclaimableBountyAfterReclaimAvailableFixture();
+
+      // when
+      const tx = await bounties.connect(issuer).reclaim(platformId, repoId, issueId, issuedToken);
+
+      // then
+      expect(tx.hash).to.be.a.string;
+    });
+
+    it('should reclaim well after required timeframe', async () => {
+      const { bounties, issuer, platformId, repoId, issueId, issuedToken } = await reclaimableBountyAfterReclaimAvailableFixture();
+      await time.increase(RECLAIM_TIMEFRAME * 10);
+
+      // when
+      const tx = await bounties.connect(issuer).reclaim(platformId, repoId, issueId, issuedToken);
+
+      // then
+      expect(tx.hash).to.be.a.string;
+    });
+
+    it('should revert when paused', async () => {
+      const { bounties, custodian, issuer, platformId, repoId, issueId, issuedToken } = await reclaimableBountyAfterReclaimAvailableFixture();
+      await bounties.connect(custodian).pause();
+
+      // when/then
+      await expect(bounties
+        .connect(issuer)
+        .reclaim(platformId, repoId, issueId, issuedToken)
+      ).to.revertedWithCustomError(bounties, 'EnforcedPause');
+    });
+
+    it('should revert when issue is closed', async () => {
+      const { bounties, issuer, platformId, repoId, issueId, usdc, executeMaintainerClaim } = await claimableLinkedBountyFixture();
+
+      // maintainer claim
+      await executeMaintainerClaim();
+
+      // when/then
+      await expect(bounties
+        .connect(issuer)
+        .reclaim(platformId, repoId, issueId, await usdc.getAddress())
+      ).to.revertedWithCustomError(bounties, 'IssueClosed');
+    });
+
+    it('should transfer bounty minus fee to issuer', async () => {
+      const { bounties, issuer, bountyAmount, usdc, platformId, repoId, issueId, issuedToken } = await reclaimableBountyAfterReclaimAvailableFixture();
+      const priorBalance = await usdc.balanceOf(issuer);
+      const expectedBalance = priorBalance + ethers.toBigInt(bountyAmount);
+
+      // when
+      await bounties
+        .connect(issuer)
+        .reclaim(platformId, repoId, issueId, issuedToken);
+
+      // then
+      expect(await usdc.balanceOf(issuer)).to.equal(expectedBalance);
+    });
+
+    it('should only transfer bounty that issuer posted', async () => {
+      const { bounties, custodian, issuer, bountyAmount, serviceFee: issuerServiceFee, usdc, platformId, repoId, issueId, issuedToken } = await reclaimableBountyAfterReclaimAvailableFixture();
+      const amount = 100_000_000;
+      const bountiesAddr = await bounties.getAddress();
+
+      // transfer from issuer to custodian
+      await usdc.connect(issuer).transfer(custodian.address, amount);
+
+      const priorBalance = await usdc.balanceOf(issuer);
+      const expectedBalance = priorBalance + ethers.toBigInt(bountyAmount);
+
+      // custodian post bounty
+      await usdc.connect(custodian).approve(bountiesAddr, amount);
+      await bounties.connect(custodian).postBounty(platformId, repoId, issueId, await usdc.getAddress(), amount);
+
+      // when
+      await bounties
+        .connect(issuer)
+        .reclaim(platformId, repoId, issueId, issuedToken);
+
+      // then
+      expect(await usdc.balanceOf(issuer)).to.equal(expectedBalance);
+      expect(await usdc.balanceOf(bountiesAddr)).to.equal(amount + issuerServiceFee);
+    });
+
+    it('should allow reclaiming immediately after posting when in reclaim timeframe', async () => {
+      const { bounties, custodian, issuer, usdc, platformId, repoId, issueId, issuedToken } = await reclaimableBountyAfterReclaimAvailableFixture();
+      const bountiesAddr = await bounties.getAddress();
+      const amount = 100_000_000;
+
+      // transfer from issuer to custodian
+      await usdc.connect(issuer).transfer(custodian.address, amount);
+
+      // custodian post bounty
+      await usdc.connect(custodian).approve(bountiesAddr, amount);
+      await bounties.connect(custodian).postBounty(platformId, repoId, issueId, await usdc.getAddress(), amount);
+
+      // when/then
+      await bounties
+        .connect(custodian)
+        .reclaim(platformId, repoId, issueId, issuedToken);
+    });
+
+    it('should revert when no amount to reclaim', async () => {
+      const { bounties, custodian, platformId, repoId, issueId, issuedToken } = await reclaimableBountyAfterReclaimAvailableFixture();
+
+      // when/then
+      await expect(bounties
+        .connect(custodian)
+        .reclaim(platformId, repoId, issueId, issuedToken)
+      ).to.be.revertedWithCustomError(bounties, 'NoBounty');
+    });
+
+    it('should revert when already reclaimed', async () => {
+      const { bounties, issuer, platformId, repoId, issueId, issuedToken } = await reclaimableBountyAfterReclaimAvailableFixture();
+      await bounties.connect(issuer).reclaim(platformId, repoId, issueId, issuedToken);
+
+      // when/then
+      await expect(bounties
+        .connect(issuer)
+        .reclaim(platformId, repoId, issueId, issuedToken)
+      ).to.be.revertedWithCustomError(bounties, 'NoBounty');
+    });
+
+    it('should reduce the amount of the bounty by the reclaimed amount', async () => {
+      const { bounties, custodian, issuer, bountyAmount: issuerBountyAmount, usdc, platformId, repoId, issueId, issuedToken } = await reclaimableBountyAfterReclaimAvailableFixture();
+      const amount = 100_000_000;
+      const fee = await serviceFee(bounties, amount);
+      const bountiesAddr = await bounties.getAddress();
+      const custodianBountyAmount = amount - fee;
+
+      // transfer from issuer to custodian
+      await usdc.connect(issuer).transfer(custodian.address, amount);
+
+      // custodian post bounty
+      await usdc.connect(custodian).approve(bountiesAddr, amount);
+      await bounties.connect(custodian).postBounty(platformId, repoId, issueId, await usdc.getAddress(), amount);
+      expect(await bounties.bounties(platformId, repoId, issueId, issuedToken)).to.be.eq(custodianBountyAmount + issuerBountyAmount);
+
+      // when
+      await bounties
+        .connect(issuer)
+        .reclaim(platformId, repoId, issueId, issuedToken);
+
+      // then
+      expect(await bounties.bounties(platformId, repoId, issueId, issuedToken)).to.be.eq(custodianBountyAmount);
+    });
+
+    // TODO: re-add this test if we can get bounties contract size down
+    it.skip('should remove token from bountyTokens when that bounty token amount goes to zero', async () => {
+      const { bounties, issuer, platformId, repoId, issueId, issuedToken } = await reclaimableBountyAfterReclaimAvailableFixture();
+
+      // when
+      await bounties
+        .connect(issuer)
+        .reclaim(platformId, repoId, issueId, issuedToken);
+
+      // then
+      expect(await bounties.bountyTokens(platformId, repoId, issueId, 0)).to.equal(ethers.ZeroAddress);
+    });
+
+    it('should emit Reclaim event', async () => {
+      const { bounties, issuer, usdc, bountyAmount, platformId, repoId, issueId, issuedToken } = await reclaimableBountyAfterReclaimAvailableFixture();
+
+      // when
+      await expect(bounties.connect(issuer).reclaim(platformId, repoId, issueId, issuedToken))
+        .to.emit(bounties, 'BountyReclaim')
+        .withArgs(
+          platformId,
+          repoId,
+          issueId,
+          issuer.address,
+          issuedToken,
+          await usdc.symbol(),
+          await usdc.decimals(),
+          bountyAmount
+        );
     });
   });
 });

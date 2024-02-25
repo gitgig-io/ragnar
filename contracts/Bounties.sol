@@ -75,10 +75,19 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
         uint256 amount
     );
 
-    // TODO: include the wallet that changed?
+    event BountyReclaim(
+        string platform,
+        string repo,
+        string issue,
+        address issuer,
+        address token,
+        string symbol,
+        uint8 decimals,
+        uint256 amount
+    );
+
     event TokenSupportChange(bool supported, address token, string symbol, uint8 decimals);
 
-    // TODO: include the wallet that changed?
     event ConfigChange(
         address notary,
         address identityContract,
@@ -96,6 +105,7 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
     error IssueClosed(string platformId, string repoId, string issueId);
     error TokenSupportError(address token, bool supported);
     error NoBounty(string platformId, string repoId, string issueId, address[] tokens);
+    error TimeframeError(uint256 eligibleDate);
 
     // roles
     bytes32 public constant CUSTODIAN_ADMIN_ROLE =
@@ -109,6 +119,16 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
     bytes32 public constant TRUSTED_CONTRACT_ROLE = keccak256("TRUSTED_CONTRACT_ROLE");
 
     bytes32 private constant TYPE_HASH = keccak256("MaintainerClaim(string maintainerUserId,string platformId,string repoId,string issueId,string[] resolverIds)");
+
+    // TODO: [QUESTION] do we need to add setter for this and add to ConfigChange event?
+    // TODO: create ticket for updating gulch ingestion of ConfigChange events
+    // number of days 
+    uint64 public constant RECLAIM_START = 365 days;
+
+    // TODO: create ticket for updating gulch ingestion of ConfigChange events
+    // number of days 
+    // TODO: [QUESTION] should this be updatable or hard-coded??? question for the broader group
+    uint64 public constant RECLAIM_DAYS = 90 days;
 
     // the identity contract
     address public identityContract;
@@ -138,6 +158,14 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
 
     mapping(string platformId => mapping(string repoId => mapping(string issueId => mapping(address tokenContract => mapping(string platformUserId => bool)))))
         public claimed;
+
+    // reclaimable date
+    // platformId -> repoId -> issueId -> token -> reclaimableDate
+    mapping(string => mapping(string => mapping(string => uint256))) public reclaimableDate;
+
+    // the amount of contributions by individual issuers for reclaim purposes
+    // platformId -> repoId -> issueId -> token -> issuer -> amount
+    mapping(string => mapping(string => mapping(string => mapping(address => mapping(address => uint256))))) public bountyContributions;
 
     mapping(address => CustomFee) public customServiceFees;
 
@@ -262,7 +290,15 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
         // record the number of tokens in the contract allocated to this issue
         uint256 _bountyAmount = _amount - _fee;
         bounties[_platform][_repoId][_issueId][_tokenContract] += _bountyAmount;
+        bountyContributions[_platform][_repoId][_issueId][_tokenContract][msg.sender] += _bountyAmount;
         _addTokenToBountyTokens(_platform, _repoId, _issueId, _tokenContract);
+
+        uint256 _reclaimableDate = reclaimableDate[_platform][_repoId][_issueId];
+
+        if (_reclaimableDate == 0) {
+          // first bounty for this token on this issue so set the reclaimableDate
+          reclaimableDate[_platform][_repoId][_issueId] = block.timestamp + RECLAIM_START;
+        } 
 
         // transfer tokens from the msg sender to this contract and record the bounty amount
         ERC20(_tokenContract).transferFrom(msg.sender, address(this), _amount);
@@ -327,6 +363,49 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
         if (_signer != notary) {
             revert InvalidSignature();
         }
+    }
+
+    // TEST: ensure token is ONLY removed from bountyTokens when that token goes to zero.
+    function reclaim(
+      string calldata _platformId,
+      string calldata _repoId,
+      string calldata _issueId,
+      address _tokenContract
+    ) public whenNotPaused issueNotClosed(_platformId, _repoId, _issueId) {
+      uint256 _reclaimWindowStart = reclaimableDate[_platformId][_repoId][_issueId];
+
+      if (block.timestamp <= _reclaimWindowStart) {
+        revert TimeframeError(_reclaimWindowStart);
+      }
+
+      uint256 _amount = bountyContributions[_platformId][_repoId][_issueId][_tokenContract][msg.sender];
+
+      if (_amount == 0) {
+        address[] memory _tokens = new address[](1);
+        _tokens[0] = _tokenContract;
+        revert NoBounty(_platformId, _repoId, _issueId, _tokens);
+      }
+
+      ERC20 token = ERC20(_tokenContract);
+      token.transfer(msg.sender, _amount);
+
+      bountyContributions[_platformId][_repoId][_issueId][_tokenContract][msg.sender] = 0;
+      bounties[_platformId][_repoId][_issueId][_tokenContract] -= _amount;
+
+      // TODO: re-add this if we can reduce contract size
+      // if (bounties[_platformId][_repoId][_issueId][_tokenContract] == 0) {
+      //   address[] storage _bountyTokens = bountyTokens[_platformId][_repoId][_issueId];
+
+      //   for (uint256 i = 0; i < _bountyTokens.length; i++) {
+      //     if (_bountyTokens[i] == _tokenContract) {
+      //       _bountyTokens[i] = _bountyTokens[_bountyTokens.length - 1];
+      //       _bountyTokens.pop();
+      //       return;
+      //     }
+      //   }
+      // }
+
+      emit BountyReclaim(_platformId, _repoId, _issueId, msg.sender, _tokenContract, token.symbol(), token.decimals(), _amount);
     }
 
     // The signature will ensure that this will always transfer tokens to the maintainer
@@ -545,12 +624,22 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
 
     // this takes a list of tokens to sweep to allow for granular sweeps
     // as well as sweeping after a token is no longer supported
+    // TODO: add tests 
+    // TEST: ensure can't be called when paused
+    // TEST: ensure can't be called before reclaim window
+    // TEST: ensure can't be called during reclaim window
     function sweepBounty(
         string calldata _platformId,
         string calldata _repoId,
         string calldata _issueId,
         address[] calldata _tokens
-    ) public onlyRole(FINANCE_ROLE) {
+    ) public onlyRole(FINANCE_ROLE) whenNotPaused {
+        uint256 _reclaimWindowEnd = reclaimableDate[_platformId][_repoId][_issueId] + RECLAIM_DAYS;
+
+        if (block.timestamp <= _reclaimWindowEnd) {
+          revert TimeframeError(_reclaimWindowEnd);
+        }
+
         bool swept = false;
         for (uint256 index = 0; index < _tokens.length; index++) {
             address _token = _tokens[index];
@@ -649,7 +738,6 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
         emitConfigChange();
     }
 
-    // TODO: add a test for adding 1k tokens and test the gas fees
     function addToken(address _newToken) public onlyRoles(CUSTODIAN_ROLE, TRUSTED_CONTRACT_ROLE) {
         if (isSupportedToken[_newToken]) {
             revert TokenSupportError(_newToken, true);
@@ -694,7 +782,6 @@ contract Bounties is EIP712, Pausable, AccessControlDefaultAdminRules, ITokenSup
         return keccak256(bytes(a)) == keccak256(bytes(b));
     }
 
-    // TODO: maybe change param order?
     function _isUnclaimedResolver(
         address _identityContract,
         address[] storage _supportedTokens,
