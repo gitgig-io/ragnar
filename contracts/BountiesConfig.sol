@@ -94,7 +94,7 @@ contract BountiesConfig is IBountiesConfig, AccessControlDefaultAdminRules, ITok
     _;
   }
 
-  function effectiveServiceFee(address _wallet) public view returns (uint8) {
+  function effectiveServiceFee(address _wallet) external view returns (uint8) {
     CustomFee storage _customFee = customServiceFees[_wallet];
     if (_customFee.enabled) {
       return _customFee.fee;
@@ -107,28 +107,25 @@ contract BountiesConfig is IBountiesConfig, AccessControlDefaultAdminRules, ITok
     emit ConfigChange(notary, identityContract, serviceFee, maintainerFee);
   }
 
-  function setNotary(address _newNotary) public onlyRole(CUSTODIAN_ROLE) {
+  function setNotary(address _newNotary) external onlyRole(CUSTODIAN_ROLE) {
     _validateAddress(_newNotary);
     notary = _newNotary;
     emitConfigChange();
   }
 
-  function setIdentity(address _newIdentity) public onlyRole(CUSTODIAN_ROLE) {
+  function setIdentity(address _newIdentity) external onlyRole(CUSTODIAN_ROLE) {
     _validateAddress(_newIdentity);
     identityContract = _newIdentity;
     emitConfigChange();
   }
 
-  function setServiceFee(uint8 _newServiceFee) public onlyRole(CUSTODIAN_ROLE) {
+  function setServiceFee(uint8 _newServiceFee) external onlyRole(CUSTODIAN_ROLE) {
     _validateFee(_newServiceFee);
     serviceFee = _newServiceFee;
     emitConfigChange();
   }
 
-  function setCustomServiceFee(address _wallet, uint8 _newServiceFee)
-    public
-    onlyRole(CUSTODIAN_ROLE)
-  {
+  function setCustomServiceFee(address _wallet, uint8 _newServiceFee) external onlyRole(CUSTODIAN_ROLE) {
     _validateFee(_newServiceFee);
     if (_newServiceFee == serviceFee) {
       delete customServiceFees[_wallet];
@@ -139,19 +136,13 @@ contract BountiesConfig is IBountiesConfig, AccessControlDefaultAdminRules, ITok
     }
   }
 
-  function setMaintainerFee(uint8 _newMaintainerFee)
-    public
-    onlyRole(CUSTODIAN_ROLE)
-  {
+  function setMaintainerFee(uint8 _newMaintainerFee) external onlyRole(CUSTODIAN_ROLE) {
     _validateFee(_newMaintainerFee);
     maintainerFee = _newMaintainerFee;
     emitConfigChange();
   }
 
-  function addToken(address _newToken)
-    public
-    onlyRoles(CUSTODIAN_ROLE, TRUSTED_CONTRACT_ROLE)
-  {
+  function addToken(address _newToken) external onlyRoles(CUSTODIAN_ROLE, TRUSTED_CONTRACT_ROLE) {
     if (isSupportedToken[_newToken]) {
       revert TokenSupportError(_newToken, true);
     }
@@ -163,10 +154,7 @@ contract BountiesConfig is IBountiesConfig, AccessControlDefaultAdminRules, ITok
     );
   }
 
-  function removeToken(address _removeToken)
-    public
-    onlyRoles(CUSTODIAN_ROLE, TRUSTED_CONTRACT_ROLE)
-  {
+  function removeToken(address _removeToken) external onlyRoles(CUSTODIAN_ROLE, TRUSTED_CONTRACT_ROLE) {
     if (!isSupportedToken[_removeToken]) {
       revert TokenSupportError(_removeToken, false);
     }

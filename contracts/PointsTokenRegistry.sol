@@ -24,10 +24,8 @@ contract PointsTokenRegistry is IPointsTokenRegistry, AccessControlDefaultAdminR
         address token
     );
 
-    bytes32 public constant TRUSTED_CONTRACT_ADMIN_ROLE =
-        keccak256("TRUSTED_CONTRACT_ADMIN_ROLE");
-    bytes32 public constant TRUSTED_CONTRACT_ROLE =
-        keccak256("TRUSTED_CONTRACT_ROLE");
+    bytes32 public constant TRUSTED_CONTRACT_ADMIN_ROLE = keccak256("TRUSTED_CONTRACT_ADMIN_ROLE");
+    bytes32 public constant TRUSTED_CONTRACT_ROLE = keccak256("TRUSTED_CONTRACT_ROLE");
 
     constructor(address _tcAdmin) AccessControlDefaultAdminRules(3 days, msg.sender) {
         _setRoleAdmin(TRUSTED_CONTRACT_ROLE, TRUSTED_CONTRACT_ADMIN_ROLE);
@@ -39,7 +37,7 @@ contract PointsTokenRegistry is IPointsTokenRegistry, AccessControlDefaultAdminR
         string calldata _owner,
         string calldata _symbol,
         address _token
-    ) public onlyRole(TRUSTED_CONTRACT_ROLE) {
+    ) external onlyRole(TRUSTED_CONTRACT_ROLE) {
         address _existing = symbols[_platformId][_owner][_symbol];
         if (_existing != address(0)) {
             revert SymbolAlreadyExists(_platformId, _owner, _symbol, _existing);
@@ -54,7 +52,7 @@ contract PointsTokenRegistry is IPointsTokenRegistry, AccessControlDefaultAdminR
         string calldata _platformId,
         string calldata _owner,
         string calldata _symbol
-    ) public view returns (address) {
+    ) external view returns (address) {
         return symbols[_platformId][_owner][_symbol];
     }
 }

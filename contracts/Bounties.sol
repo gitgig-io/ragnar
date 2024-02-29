@@ -88,6 +88,8 @@ contract Bounties is
     uint256 amount
   );
 
+  event ConfigChange(address configContract);
+
   error AlreadyClaimed(string platformId, string repoId, string issueId, address claimer);
   error IdentityNotFound(string platformId, string platformUserId);
   error InvalidResolver(string platformId, string repoId, string issueId, address claimer);
@@ -139,10 +141,8 @@ contract Bounties is
   // platformId -> repoId -> issueId -> token -> issuer -> amount
   mapping(string => mapping(string => mapping(string => mapping(address => mapping(address => uint256))))) public bountyContributions;
 
-  // TODO: add setter
   address public configContract;
 
-  // TODO: add ConfigChange event
   constructor(address _configContract, address _custodian, address _finance)
     Pausable()
     AccessControlDefaultAdminRules(3 days, msg.sender)
@@ -155,6 +155,7 @@ contract Bounties is
     _setRoleAdmin(CUSTODIAN_ROLE, CUSTODIAN_ADMIN_ROLE);
     _setRoleAdmin(FINANCE_ROLE, FINANCE_ADMIN_ROLE);
     configContract = _configContract;
+    emit ConfigChange(configContract);
   }
 
   modifier supportedToken(address tokenContract) {
@@ -205,6 +206,11 @@ contract Bounties is
     _;
   }
 
+  function setConfigContract(address _configContract) external onlyRole(CUSTODIAN_ROLE) {
+    configContract = _configContract;
+    emit ConfigChange(configContract);
+  }
+
   function postBounty(
     string calldata _platform,
     string calldata _repoId,
@@ -212,7 +218,7 @@ contract Bounties is
     address _tokenContract,
     uint256 _amount
   )
-    public
+    external
     whenNotPaused
     issueNotClosed(_platform, _repoId, _issueId)
     supportedToken(_tokenContract)
@@ -327,13 +333,12 @@ contract Bounties is
     }
   }
 
-  // TEST: ensure token is ONLY removed from bountyTokens when that token goes to zero.
   function reclaim(
     string calldata _platformId,
     string calldata _repoId,
     string calldata _issueId,
     address _tokenContract
-  ) public whenNotPaused issueNotClosed(_platformId, _repoId, _issueId) {
+  ) external whenNotPaused issueNotClosed(_platformId, _repoId, _issueId) {
     uint256 _reclaimWindowStart = reclaimableAt[_platformId][_repoId][_issueId];
 
     if (block.timestamp <= _reclaimWindowStart) {
@@ -379,7 +384,7 @@ contract Bounties is
     string calldata _issueId,
     string[] calldata _resolverIds,
     bytes calldata _signature
-  ) public whenNotPaused issueNotClosed(_platformId, _repoId, _issueId) {
+  ) external whenNotPaused issueNotClosed(_platformId, _repoId, _issueId) {
     // lookup maintainer wallet from _maintainerUserId
     address _maintainerAddress = _getIdentity().ownerOf(_platformId, _maintainerUserId);
 
@@ -463,7 +468,7 @@ contract Bounties is
     string calldata _platformId,
     string calldata _repoId,
     string calldata _issueId
-  ) public whenNotPaused unclaimedResolverOnly(_platformId, _repoId, _issueId) {
+  ) external whenNotPaused unclaimedResolverOnly(_platformId, _repoId, _issueId) {
     IIdentity _identity = _getIdentity();
     for (
       uint256 i = 0; i < _identity.balanceOf(msg.sender); i++
@@ -542,14 +547,14 @@ contract Bounties is
     }
   }
 
-  function withdrawFees(address _tokenContract) public onlyRole(FINANCE_ROLE) {
+  function withdrawFees(address _tokenContract) external onlyRole(FINANCE_ROLE) {
     ERC20 _token = ERC20(_tokenContract);
     uint256 _amount = fees[_tokenContract];
     fees[_tokenContract] -= _amount;
     _withdraw(_token, _amount, msg.sender, "fee");
   }
 
-  function withdrawUnsupportedToken(address _tokenContract) public onlyRole(FINANCE_ROLE) {
+  function withdrawUnsupportedToken(address _tokenContract) external onlyRole(FINANCE_ROLE) {
     if (_getConfig().isSupportedToken(_tokenContract)) {
       revert TokenSupportError(_tokenContract, true);
     }
@@ -585,7 +590,7 @@ contract Bounties is
     string calldata _repoId,
     string calldata _issueId,
     address[] calldata _tokens
-  ) public onlyRole(FINANCE_ROLE) whenNotPaused {
+  ) external onlyRole(FINANCE_ROLE) whenNotPaused {
     uint256 _reclaimWindowEnd =
       reclaimableAt[_platformId][_repoId][_issueId] + RECLAIM_DAYS;
 
@@ -637,19 +642,11 @@ contract Bounties is
     }
   }
 
-  function isIssueClosed(
-    string calldata _platform,
-    string calldata _repoId,
-    string calldata _issueId
-  ) public view returns (bool) {
-    return resolvers[_platform][_repoId][_issueId].length > 0;
-  }
-
-  function pause() public onlyRole(CUSTODIAN_ROLE) {
+  function pause() external onlyRole(CUSTODIAN_ROLE) {
     _pause();
   }
 
-  function unpause() public onlyRole(CUSTODIAN_ROLE) {
+  function unpause() external onlyRole(CUSTODIAN_ROLE) {
     _unpause();
   }
 

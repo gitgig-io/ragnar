@@ -9,8 +9,13 @@ import { maintainerClaimSignature, mintSignature } from "./helpers/signatureHelp
 const BIG_SUPPLY = ethers.toBigInt("1000000000000000000000000000");
 
 describe("Bounties", () => {
-  async function bountiesFixture() {
+  async function getAddresses() {
     const [owner, custodian, finance, notary, issuer, maintainer, contributor, contributor2, contributor3] = await ethers.getSigners();
+    return { owner, custodian, finance, notary, issuer, maintainer, contributor, contributor2, contributor3 };
+  }
+
+  async function bountiesFixture() {
+    const { owner, custodian, finance, notary, issuer, maintainer, contributor, contributor2, contributor3 } = await getAddresses();
 
     const TestERC20Factory = await ethers.getContractFactory("TestERC20");
 
@@ -979,51 +984,6 @@ describe("Bounties", () => {
     });
   });
 
-  // TODO: move to BountiesConfig test
-  // describe("SetNotary", () => {
-  //   it('should update notary', async () => {
-  //     const { bounties, custodian, finance } = await bountiesFixture();
-
-  //     // when
-  //     const txn = await bounties.connect(custodian).setNotary(finance.address);
-
-  //     // then
-  //     expect(txn.hash).to.be.a.string;
-  //     expect(await bounties.notary()).to.be.eq(finance.address);
-  //   });
-
-  //   it('should revert with invalid notary address', async () => {
-  //     const { bounties, custodian } = await bountiesFixture();
-
-  //     // when/then
-  //     await expect(bounties.connect(custodian).setNotary(ethers.ZeroAddress))
-  //       .to.be.revertedWithCustomError(bounties, "InvalidAddress")
-  //       .withArgs(ethers.ZeroAddress);
-  //   });
-
-  //   it('should emit ConfigChange event', async () => {
-  //     const { bounties, identity, custodian, finance } = await bountiesFixture();
-
-  //     // when
-  //     await expect(bounties.connect(custodian).setNotary(finance.address))
-  //       .to.emit(bounties, "ConfigChange")
-  //       .withArgs(
-  //         await finance.getAddress(),
-  //         await identity.getAddress(),
-  //         await bounties.serviceFee(),
-  //         await bounties.maintainerFee()
-  //       );
-  //   });
-
-  //   it('should not allow non-custodian to update notary', async () => {
-  //     const { bounties, finance } = await bountiesFixture();
-
-  //     // when/then
-  //     await expect(bounties.connect(finance).setNotary(finance.address))
-  //       .to.be.revertedWithCustomError(bounties, "AccessControlUnauthorizedAccount");
-  //   });
-  // });
-
   describe("AccessControl:Finance", () => {
     it('should grant finance role', async () => {
       const { bounties, finance, issuer } = await bountiesFixture();
@@ -1059,362 +1019,34 @@ describe("Bounties", () => {
     });
   });
 
-  // TODO: move to BountiesConfig test
-  // describe("SetIdentity", () => {
-  //   it('should update identity contract', async () => {
-  //     const { bounties, custodian, issuer } = await bountiesFixture();
-
-  //     // when
-  //     const txn = await bounties.connect(custodian).setIdentity(issuer.address);
-
-  //     // then
-  //     expect(txn.hash).to.be.a.string;
-  //     expect(await bounties.identityContract()).to.be.eq(issuer.address);
-  //   });
-
-  //   it('should revert with invalid identity address', async () => {
-  //     const { bounties, custodian } = await bountiesFixture();
-
-  //     // when/then
-  //     await expect(bounties.connect(custodian).setIdentity(ethers.ZeroAddress))
-  //       .to.be.revertedWithCustomError(bounties, "InvalidAddress")
-  //       .withArgs(ethers.ZeroAddress);
-  //   });
-
-  //   it('should emit ConfigChange event', async () => {
-  //     const { bounties, custodian, notary, issuer } = await bountiesFixture();
-
-  //     // when
-  //     await expect(bounties.connect(custodian).setIdentity(issuer.address))
-  //       .to.emit(bounties, "ConfigChange")
-  //       .withArgs(
-  //         await notary.getAddress(),
-  //         await issuer.getAddress(),
-  //         await bounties.serviceFee(),
-  //         await bounties.maintainerFee()
-  //       );
-  //   });
-
-  //   it('should not allow non-custodian to update identity contract', async () => {
-  //     const { bounties, finance, issuer } = await bountiesFixture();
-
-  //     // when/then
-  //     await expect(bounties.connect(finance).setIdentity(issuer.address))
-  //       .to.be.revertedWithCustomError(bounties, "AccessControlUnauthorizedAccount");
-  //   });
-  // });
-
-  // TODO: move to BountiesConfig test
-  // describe("SetServiceFee", () => {
-  //   it('should update service fee', async () => {
-  //     const { bounties, custodian } = await bountiesFixture();
-
-  //     // when
-  //     const txn = await bounties.connect(custodian).setServiceFee(50);
-
-  //     // then
-  //     expect(txn.hash).to.be.a.string;
-  //     expect(await bounties.serviceFee()).to.be.eq(50);
-  //   });
-
-  //   it('should emit ConfigChange event', async () => {
-  //     const { bounties, identity, custodian, notary } = await bountiesFixture();
-
-  //     // when
-  //     await expect(bounties.connect(custodian).setServiceFee(50))
-  //       .to.emit(bounties, "ConfigChange")
-  //       .withArgs(
-  //         await notary.getAddress(),
-  //         await identity.getAddress(),
-  //         50,
-  //         await bounties.maintainerFee()
-  //       );
-  //   });
-
-  //   it('should not allow non-custodian to update service fee', async () => {
-  //     const { bounties, finance } = await bountiesFixture();
-
-  //     // when/then
-  //     await expect(bounties.connect(finance).setServiceFee(50))
-  //       .to.be.revertedWithCustomError(bounties, "AccessControlUnauthorizedAccount");
-  //   });
-
-  //   // TODO: figure out how to check for a TypeError
-  //   it.skip('should not allow service fee below zero', async () => {
-  //     const { bounties, custodian } = await bountiesFixture();
-
-  //     // when/then
-  //     expect(() => bounties.connect(custodian).setServiceFee(-1)).to.throw();
-  //   });
-
-  //   it('should not allow service fee over 100', async () => {
-  //     const { bounties, custodian } = await bountiesFixture();
-
-  //     // when/then
-  //     await expect(bounties.connect(custodian).setServiceFee(101))
-  //       .to.be.revertedWithCustomError(bounties, "InvalidFee")
-  //       .withArgs(101);
-  //   });
-  // });
-
-  // TODO: move to BountiesConfig test
-  // describe("SetCustomServiceFee", () => {
-  //   it('should update service fee', async () => {
-  //     const { bounties, custodian, issuer } = await bountiesFixture();
-
-  //     // when
-  //     const txn = await bounties.connect(custodian).setCustomServiceFee(issuer.address, 3);
-
-  //     // then
-  //     expect(txn.hash).to.be.a.string;
-  //     expect(await bounties.effectiveServiceFee(issuer.address)).to.be.eq(3);
-  //   });
-
-  //   it('should emit CustomFeeChange event when enabled', async () => {
-  //     const { bounties, custodian, issuer } = await bountiesFixture();
-
-  //     // when
-  //     await expect(bounties.connect(custodian).setCustomServiceFee(issuer.address, 3))
-  //       .to.emit(bounties, "CustomFeeChange")
-  //       .withArgs(
-  //         issuer.address,
-  //         "service",
-  //         3,
-  //         true
-  //       );
-  //   });
-
-  //   it('should emit CustomFeeChange event when disabled', async () => {
-  //     const { bounties, custodian, issuer } = await bountiesFixture();
-
-  //     // when
-  //     await bounties.connect(custodian).setCustomServiceFee(issuer.address, 3);
-  //     await expect(bounties.connect(custodian).setCustomServiceFee(issuer.address, 20))
-  //       .to.emit(bounties, "CustomFeeChange")
-  //       .withArgs(
-  //         issuer.address,
-  //         "service",
-  //         20,
-  //         false
-  //       );
-  //   });
-
-  //   it('should not allow non-custodian to update service fee', async () => {
-  //     const { bounties, finance, issuer } = await bountiesFixture();
-
-  //     // when/then
-  //     await expect(bounties.connect(finance).setCustomServiceFee(issuer.address, 3))
-  //       .to.be.revertedWithCustomError(bounties, "AccessControlUnauthorizedAccount");
-  //   });
-
-  //   // TODO: figure out how to check for a TypeError
-  //   it.skip('should not allow service fee below zero', async () => {
-  //     const { bounties, custodian, issuer } = await bountiesFixture();
-
-  //     // when/then
-  //     expect(() => bounties.connect(custodian).setCustomServiceFee(issuer.address, -1)).to.throw();
-  //   });
-
-  //   it('should not allow service fee over 100', async () => {
-  //     const { bounties, custodian, issuer } = await bountiesFixture();
-
-  //     // when/then
-  //     await expect(bounties.connect(custodian).setCustomServiceFee(issuer.address, 101))
-  //       .to.be.revertedWithCustomError(bounties, "InvalidFee")
-  //       .withArgs(101);
-  //   });
-  // });
-
-  // TODO: move to BountiesConfig test
-  // describe("EffectiveServiceFee", () => {
-  //   it('should return the default service fee when no custom fee set', async () => {
-  //     const { bounties, issuer } = await bountiesFixture();
-  //     expect(await bounties.effectiveServiceFee(issuer.address)).to.be.eq(20);
-  //   });
-
-  //   it('should return the custom service fee when set', async () => {
-  //     const { bounties, custodian, issuer } = await bountiesFixture();
-  //     await bounties.connect(custodian).setCustomServiceFee(issuer.address, 3);
-  //     expect(await bounties.effectiveServiceFee(issuer.address)).to.be.eq(3);
-  //   });
-
-  //   it('should return the default service fee when custom fee set for other wallet', async () => {
-  //     const { bounties, custodian, issuer } = await bountiesFixture();
-  //     await bounties.connect(custodian).setCustomServiceFee(custodian.address, 3);
-  //     expect(await bounties.effectiveServiceFee(issuer.address)).to.be.eq(20);
-  //   });
-  // });
-
-  // TODO: move to BountiesConfig test
-  // describe("SetMaintainerFee", () => {
-  //   it('should update maintainer fee', async () => {
-  //     const { bounties, custodian } = await bountiesFixture();
-
-  //     // when
-  //     const txn = await bounties.connect(custodian).setMaintainerFee(50);
-
-  //     // then
-  //     expect(txn.hash).to.be.a.string;
-  //     expect(await bounties.maintainerFee()).to.be.eq(50);
-  //   });
-
-  //   it('should emit ConfigChange event', async () => {
-  //     const { bounties, identity, custodian, notary } = await bountiesFixture();
-
-  //     // when
-  //     await expect(bounties.connect(custodian).setMaintainerFee(50))
-  //       .to.emit(bounties, "ConfigChange")
-  //       .withArgs(
-  //         await notary.getAddress(),
-  //         await identity.getAddress(),
-  //         await bounties.serviceFee(),
-  //         50
-  //       );
-  //   });
-
-  //   it('should not allow non-custodian to update maintainer fee', async () => {
-  //     const { bounties, finance } = await bountiesFixture();
-
-  //     // when/then
-  //     await expect(bounties.connect(finance).setMaintainerFee(50))
-  //       .to.be.revertedWithCustomError(bounties, "AccessControlUnauthorizedAccount");
-  //   });
-
-  //   it('should not allow maintainer fee over 100', async () => {
-  //     const { bounties, custodian } = await bountiesFixture();
-
-  //     // when/then
-  //     await expect(bounties.connect(custodian).setMaintainerFee(101))
-  //       .to.be.revertedWithCustomError(bounties, "InvalidFee")
-  //       .withArgs(101);
-  //   });
-
-  //   // TODO: figure out how to test for a TypeError INVALID_ARGUMENT
-  //   it.skip('should not allow maintainer fee below zero', async () => {
-  //     const { bounties, custodian } = await bountiesFixture();
-
-  //     // when/then
-  //     await expect(bounties.connect(custodian).setMaintainerFee(-1))
-  //       .to.be.revertedWithCustomError(bounties, "InvalidFee")
-  //       .withArgs(-1);
-  //   });
-  // });
-
-  // describe("AddToken", () => {
-  //   it('should add a supported token', async () => {
-  //     const { bounties, custodian, issuer } = await bountiesFixture();
-  //     const usdc2 = await usdcFixture(issuer);
-
-  //     // when
-  //     const txn = await bounties.connect(custodian).addToken(await usdc2.getAddress());
-
-  //     // then
-  //     expect(txn.hash).to.be.a.string;
-  //   });
-
-  //   it('should update supported token map', async () => {
-  //     const { bounties, custodian, issuer, usdc, arb, weth } = await bountiesFixture();
-  //     const usdc2 = await usdcFixture(issuer);
-  //     const usdc2Addr = await usdc2.getAddress();
-
-  //     // when
-  //     await bounties.connect(custodian).addToken(usdc2Addr);
-
-  //     // then
-  //     expect(await bounties.isSupportedToken(await usdc.getAddress())).to.be.true;
-  //     expect(await bounties.isSupportedToken(await arb.getAddress())).to.be.true;
-  //     expect(await bounties.isSupportedToken(await weth.getAddress())).to.be.true;
-  //     expect(await bounties.isSupportedToken(usdc2Addr)).to.be.true;
-  //   });
-
-  //   it('should emit TokenSupportChange event', async () => {
-  //     const { bounties, custodian, issuer } = await bountiesFixture();
-  //     const usdc2 = await usdcFixture(issuer);
-  //     const usdc2Addr = await usdc2.getAddress();
-
-  //     // when/then
-  //     await expect(bounties.connect(custodian).addToken(usdc2Addr)).to.emit(bounties, "TokenSupportChange").withArgs(
-  //       true,
-  //       usdc2Addr,
-  //       "USDC",
-  //       6
-  //     );
-  //   });
-
-  //   it('should revert when called by non-custodian', async () => {
-  //     const { bounties, issuer } = await bountiesFixture();
-  //     const usdc2 = await usdcFixture(issuer);
-  //     const usdc2Addr = await usdc2.getAddress();
-
-  //     // when
-  //     await expect(bounties.connect(issuer).addToken(usdc2Addr))
-  //       .to.be.revertedWithCustomError(bounties, "AccessControlUnauthorizedAccount");
-  //   });
-
-  //   it('should revert when called with already supported token', async () => {
-  //     const { bounties, custodian, usdc } = await bountiesFixture();
-  //     const usdcAddr = await usdc.getAddress();
-
-  //     // when
-  //     await expect(bounties.connect(custodian).addToken(usdcAddr))
-  //       .to.be.revertedWithCustomError(bounties, "TokenSupportError")
-  //       .withArgs(usdcAddr, true);
-  //   });
-  // });
-
-  // describe("RemoveToken", () => {
-  //   it('should remove a supported token', async () => {
-  //     const { bounties, custodian, usdc } = await bountiesFixture();
-
-  //     // when
-  //     const txn = await bounties.connect(custodian).removeToken(await usdc.getAddress());
-
-  //     // then
-  //     expect(txn.hash).to.be.a.string;
-  //   });
-
-  //   it('should update supported token map', async () => {
-  //     const { bounties, custodian, usdc } = await bountiesFixture();
-
-  //     // when
-  //     await bounties.connect(custodian).removeToken(await usdc.getAddress());
-
-  //     // then
-  //     expect(await bounties.isSupportedToken(await usdc.getAddress())).to.be.false;
-  //   });
-
-  //   it('should emit TokenSupportChange event', async () => {
-  //     const { bounties, custodian, usdc } = await bountiesFixture();
-  //     const usdcAddr = await usdc.getAddress();
-
-  //     // when/then
-  //     await expect(bounties.connect(custodian).removeToken(usdcAddr)).to.emit(bounties, "TokenSupportChange").withArgs(
-  //       false,
-  //       usdcAddr,
-  //       "USDC",
-  //       6
-  //     );
-  //   });
-
-  //   it('should revert when called by non-custodian', async () => {
-  //     const { bounties, issuer, usdc } = await bountiesFixture();
-
-  //     // when
-  //     await expect(bounties.connect(issuer).removeToken(await usdc.getAddress()))
-  //       .to.be.revertedWithCustomError(bounties, "AccessControlUnauthorizedAccount");
-  //   });
-
-  //   it('should revert when called with non-supported token', async () => {
-  //     const { bounties, custodian, issuer } = await bountiesFixture();
-  //     const usdc2 = await usdcFixture(issuer);
-  //     const usdc2Addr = await usdc2.getAddress();
-
-  //     // when
-  //     await expect(bounties.connect(custodian).removeToken(usdc2Addr))
-  //       .to.be.revertedWithCustomError(bounties, "TokenSupportError")
-  //       .withArgs(usdc2Addr, false);
-  //   });
-  // });
+  describe("SetConfigContract", () => {
+    it('should update config contract', async () => {
+      const { bounties, custodian, issuer } = await bountiesFixture();
+
+      // when
+      await bounties.connect(custodian).setConfigContract(issuer.address);
+
+      // then
+      expect(await bounties.configContract()).to.equal(issuer.address);
+    });
+
+    it('should emit ConfigChange event', async () => {
+      const { bounties, custodian, issuer } = await bountiesFixture();
+
+      // when / then
+      await expect(bounties.connect(custodian).setConfigContract(issuer.address))
+        .to.emit(bounties, "ConfigChange")
+        .withArgs(issuer.address);
+    });
+
+    it('should not allow non-custodian to update service fee', async () => {
+      const { bounties, finance, issuer } = await bountiesFixture();
+
+      // when/then
+      await expect(bounties.connect(finance).setConfigContract(issuer.address))
+        .to.be.revertedWithCustomError(bounties, "AccessControlUnauthorizedAccount");
+    });
+  });
 
   describe("Pause", () => {
     it('should pause', async () => {

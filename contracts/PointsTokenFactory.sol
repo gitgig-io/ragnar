@@ -84,7 +84,7 @@ contract PointsTokenFactory is
         totalSupply = _totalSupply;
         fee = _fee;
 
-        emitConfigChange();
+        _emitConfigChange();
     }
 
     function createPointsToken(
@@ -93,7 +93,7 @@ contract PointsTokenFactory is
         string calldata _platformId,
         string calldata _owner,
         bytes calldata _signature
-    ) public payable {
+    ) external payable {
         _validateFee(msg.value);
         _validateSymbol(_symbol);
         _validateSignature(_name, _symbol, _platformId, _owner, _signature);
@@ -191,41 +191,35 @@ contract PointsTokenFactory is
     // custodian functions
     // --------------------
 
-    function setDecimals(uint8 _decimals) public onlyRole(CUSTODIAN_ROLE) {
+    function setDecimals(uint8 _decimals) external onlyRole(CUSTODIAN_ROLE) {
         if (_decimals > 18) {
             revert InvalidArgument();
         }
         dec = _decimals;
-        emitConfigChange();
+        _emitConfigChange();
     }
 
-    function setTotalSupply(uint256 _totalSupply)
-        public
-        onlyRole(CUSTODIAN_ROLE)
-    {
+    function setTotalSupply(uint256 _totalSupply) external onlyRole(CUSTODIAN_ROLE) {
         totalSupply = _totalSupply;
-        emitConfigChange();
+        _emitConfigChange();
     }
 
-    function setFee(uint256 _fee) public onlyRole(CUSTODIAN_ROLE) {
+    function setFee(uint256 _fee) external onlyRole(CUSTODIAN_ROLE) {
         fee = _fee;
-        emitConfigChange();
+        _emitConfigChange();
     }
 
-    function setRegistry(address _registry) public onlyRole(CUSTODIAN_ROLE) {
+    function setRegistry(address _registry) external onlyRole(CUSTODIAN_ROLE) {
         registry = _registry;
-        emitConfigChange();
+        _emitConfigChange();
     }
 
-    function setNotary(address _notary) public onlyRole(CUSTODIAN_ROLE) {
+    function setNotary(address _notary) external onlyRole(CUSTODIAN_ROLE) {
         _setNotary(_notary);
-        emitConfigChange();
+        _emitConfigChange();
     }
 
-    function addBountiesConfigContract(address _bounties)
-        public
-        onlyRole(CUSTODIAN_ROLE)
-    {
+    function addBountiesConfigContract(address _bounties) external onlyRole(CUSTODIAN_ROLE) {
         for (uint256 i = 0; i < bountiesConfigContracts.length; i++) {
             if (bountiesConfigContracts[i] == _bounties) {
                 revert InvalidArgument();
@@ -233,13 +227,10 @@ contract PointsTokenFactory is
         }
 
         bountiesConfigContracts.push(_bounties);
-        emitConfigChange();
+        _emitConfigChange();
     }
 
-    function removeBountiesConfigContract(address _bounties)
-        public
-        onlyRole(CUSTODIAN_ROLE)
-    {
+    function removeBountiesConfigContract(address _bounties) external onlyRole(CUSTODIAN_ROLE) {
         bool _found = false;
         // find _bounties in the bountiesConfigContracts list
         for (uint256 i = 0; i < bountiesConfigContracts.length; i++) {
@@ -256,14 +247,14 @@ contract PointsTokenFactory is
             revert InvalidArgument();
         }
 
-        emitConfigChange();
+        _emitConfigChange();
     }
 
     // ------------------
     // finance functions
     // ------------------
 
-    function withdrawFees() public onlyRole(FINANCE_ROLE) {
+    function withdrawFees() external onlyRole(FINANCE_ROLE) {
         uint256 amount = address(this).balance;
         address payable receipient = payable(msg.sender);
 
@@ -272,7 +263,7 @@ contract PointsTokenFactory is
         emit FeeWithdraw(receipient, amount);
     }
 
-    function emitConfigChange() private {
+    function _emitConfigChange() private {
         emit ConfigChange(
             fee,
             dec,

@@ -142,7 +142,7 @@ contract Identity is
         string calldata _platformUsername,
         uint16 _nonce,
         bytes calldata _signature
-    ) public whenNotPaused {
+    ) external whenNotPaused {
         // ensure token has not already been minted for this platform user
         if (tokenIdForPlatformUser[_platformId][_platformUserId] != 0) {
           revert AlreadyMinted(_platformId, _platformUserId);
@@ -188,7 +188,7 @@ contract Identity is
         string calldata _platformUsername,
         uint16 _nonce,
         bytes calldata _signature
-    ) public whenNotPaused {
+    ) external whenNotPaused {
         _validateNonce(_platformId, _platformUserId, _nonce);
 
         _validateLinkSignature(
@@ -223,7 +223,7 @@ contract Identity is
         );
     }
 
-    function ownerOf(string calldata _platformId, string calldata _platformUserId) override public view returns (address) {
+    function ownerOf(string calldata _platformId, string calldata _platformUserId) override external view returns (address) {
       uint256 _tokenId = tokenIdForPlatformUser[_platformId][_platformUserId];
       return _ownerOf(_tokenId);
     }
@@ -246,15 +246,15 @@ contract Identity is
             );
     }
 
-    function pause() public onlyRole(CUSTODIAN_ROLE) {
+    function pause() external onlyRole(CUSTODIAN_ROLE) {
         _pause();
     }
 
-    function unpause() public onlyRole(CUSTODIAN_ROLE) {
+    function unpause() external onlyRole(CUSTODIAN_ROLE) {
         _unpause();
     }
 
-    function setNotary(address _newNotary) public onlyRole(CUSTODIAN_ROLE) {
+    function setNotary(address _newNotary) external onlyRole(CUSTODIAN_ROLE) {
         if (_newNotary == address(0)) {
           revert InvalidAddress(_newNotary);
         }
@@ -263,9 +263,7 @@ contract Identity is
         emit ConfigChange(notary, baseUri);
     }
 
-    function setBaseUri(string calldata _newBaseUri)
-        public
-        onlyRole(CUSTODIAN_ROLE)
+    function setBaseUri(string calldata _newBaseUri) external onlyRole(CUSTODIAN_ROLE)
     {
         baseUri = _newBaseUri;
         emit ConfigChange(notary, baseUri);
@@ -307,7 +305,7 @@ contract Identity is
       return super.balanceOf(owner);
     }
 
-    function platformUser(uint256 tokenId) override(IIdentity) public view returns (PlatformUser memory) {
+    function platformUser(uint256 tokenId) override(IIdentity) external view returns (PlatformUser memory) {
       return platformUserForTokenId[tokenId];
     }
 }
