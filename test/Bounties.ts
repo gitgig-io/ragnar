@@ -1,9 +1,10 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { maintainerClaimSignature, mintSignature } from "./helpers/signatureHelpers";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { time } from "@nomicfoundation/hardhat-network-helpers";
+import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { Bounties, BountiesConfig, Identity, TestERC20 } from "../typechain-types";
+import { maintainerClaimSignature, mintSignature } from "./helpers/signatureHelpers";
 
 const BIG_SUPPLY = ethers.toBigInt("1000000000000000000000000000");
 
@@ -237,7 +238,8 @@ describe("Bounties", () => {
           "USDC",
           6,
           amount - fee,
-          fee
+          fee,
+          anyValue
         )
     });
 
@@ -290,6 +292,49 @@ describe("Bounties", () => {
       // then
       // ensure the smart contract has the tokens now
       expect(await bounties.bountyTokens("1", "gitgig-io/ragnar", "123", 0)).to.be.eq(await usdc.getAddress());
+    });
+
+    it("should set reclaimableAt on first bounty posted on issue", async () => {
+      const { bounties, issuer, usdc } = await bountiesFixture();
+      const platform = "1";
+      const repo = "gitgig-io/ragnar";
+      const issue = "123";
+      const amount = 5;
+      expect(await bounties.reclaimableAt(platform, repo, issue)).to.be.eq(0);
+
+      // when
+      await usdc.connect(issuer).approve(await bounties.getAddress(), amount);
+      await bounties.connect(issuer).postBounty(platform, repo, issue, await usdc.getAddress(), amount);
+
+      // then
+      const now = Math.floor((new Date()).getTime() / 1000);
+      const beforeOneYear = now + (60 * 60 * 24 * 364);
+      const afterOneYear = now + (60 * 60 * 24 * 366);
+      expect(await bounties.reclaimableAt(platform, repo, issue)).to.be.greaterThan(beforeOneYear);
+      expect(await bounties.reclaimableAt(platform, repo, issue)).to.be.lessThan(afterOneYear);
+    });
+
+    it("should not update reclaimableAt on second bounty posted on issue", async () => {
+      const { bounties, issuer, usdc } = await bountiesFixture();
+      const platform = "1";
+      const repo = "gitgig-io/ragnar";
+      const issue = "123";
+      const amount = 5;
+
+      // first bounty
+      await usdc.connect(issuer).approve(await bounties.getAddress(), amount);
+      await bounties.connect(issuer).postBounty(platform, repo, issue, await usdc.getAddress(), amount);
+      const reclaimableAt = await bounties.reclaimableAt(platform, repo, issue);
+
+      // move time forward a few days
+      await time.increase(60 * 60 * 24 * 5);
+
+      // when
+      await usdc.connect(issuer).approve(await bounties.getAddress(), amount);
+      await bounties.connect(issuer).postBounty(platform, repo, issue, await usdc.getAddress(), amount);
+
+      // then
+      expect(await bounties.reclaimableAt(platform, repo, issue)).to.be.equal(reclaimableAt);
     });
   });
 
@@ -1688,9 +1733,9 @@ describe("Bounties", () => {
       expect(await bounties.bounties(platformId, repoId, issueId, issuedToken)).to.be.eq(custodianBountyAmount);
     });
 
-    // TODO: re-add this test if we can get bounties contract size down
-    it.skip('should remove token from bountyTokens when that bounty token amount goes to zero', async () => {
+    it('should remove token from bountyTokens when that bounty token amount goes to zero', async () => {
       const { bounties, issuer, platformId, repoId, issueId, issuedToken } = await reclaimableBountyAfterReclaimAvailableFixture();
+      expect(await bounties.bountyTokens(platformId, repoId, issueId, 0)).to.match(/0x/);
 
       // when
       await bounties
@@ -1698,7 +1743,7 @@ describe("Bounties", () => {
         .reclaim(platformId, repoId, issueId, issuedToken);
 
       // then
-      expect(await bounties.bountyTokens(platformId, repoId, issueId, 0)).to.equal(ethers.ZeroAddress);
+      await expect(bounties.bountyTokens(platformId, repoId, issueId, 0)).to.be.reverted;
     });
 
     it('should emit Reclaim event', async () => {

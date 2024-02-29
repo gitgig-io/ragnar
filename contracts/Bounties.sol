@@ -29,7 +29,8 @@ contract Bounties is
     string symbol,
     uint8 decimals,
     uint256 amount,
-    uint256 fee
+    uint256 fee,
+    uint256 reclaimableAt
   );
 
   event IssueTransition(
@@ -93,7 +94,7 @@ contract Bounties is
   error IssueClosed(string platformId, string repoId, string issueId);
   error TokenSupportError(address token, bool supported);
   error NoBounty(string platformId, string repoId, string issueId, address[] tokens);
-  error TimeframeError(uint256 eligibleDate);
+  error TimeframeError(uint256 eligibleAt);
 
   // roles
   bytes32 public constant CUSTODIAN_ADMIN_ROLE = keccak256("CUSTODIAN_ADMIN_ROLE");
@@ -105,20 +106,17 @@ contract Bounties is
     "MaintainerClaim(string maintainerUserId,string platformId,string repoId,string issueId,string[] resolverIds)"
   );
 
-  // TODO: create ticket for updating gulch ingestion of ConfigChange events
-  // number of days
+  // how long before bounties are reclaimable for an issue (from first bounty posted on the issue)
   uint64 public constant RECLAIM_START = 365 days;
 
   // number of days
-  // TODO: [QUESTION] should this be updatable or hard-coded??? question for the broader group
   uint64 public constant RECLAIM_DAYS = 90 days;
 
   // store the service fees that have accumulated
   mapping(address => uint256) public fees;
 
   // store registered and closed issues. 0 resolvers means registered, 1+ resolvers means closed
-  mapping(string => mapping(string => mapping(string => string[]))) public
-    resolvers;
+  mapping(string => mapping(string => mapping(string => string[]))) public resolvers;
 
   // store bounties by platform, repo, issue and token
   mapping(
@@ -131,9 +129,9 @@ contract Bounties is
 
   mapping(string platformId => mapping(string repoId => mapping(string issueId => mapping(address tokenContract => mapping(string platformUserId => bool))))) public claimed;
 
-  // reclaimable date
-  // platformId -> repoId -> issueId -> token -> reclaimableDate
-  mapping(string => mapping(string => mapping(string => uint256))) public reclaimableDate;
+  // when the bounties on an issue are reclaimable
+  // platformId -> repoId -> issueId -> reclaimableAt
+  mapping(string => mapping(string => mapping(string => uint256))) public reclaimableAt;
 
   // the amount of contributions by individual issuers for reclaim purposes
   // platformId -> repoId -> issueId -> token -> issuer -> amount
@@ -217,24 +215,23 @@ contract Bounties is
     issueNotClosed(_platform, _repoId, _issueId)
     supportedToken(_tokenContract)
   {
-    // capture fee
-
     uint256 _fee = (_amount * _getConfig().effectiveServiceFee(msg.sender)) / 100;
+    uint256 _bountyAmount = _amount - _fee;
+
+    // capture fee
     fees[_tokenContract] += _fee;
 
     // record the number of tokens in the contract allocated to this issue
-    uint256 _bountyAmount = _amount - _fee;
     bounties[_platform][_repoId][_issueId][_tokenContract] += _bountyAmount;
-    bountyContributions[_platform][_repoId][_issueId][_tokenContract][msg.sender]
-    += _bountyAmount;
+    bountyContributions[_platform][_repoId][_issueId][_tokenContract][msg.sender] += _bountyAmount;
     _addTokenToBountyTokens(_platform, _repoId, _issueId, _tokenContract);
 
-    uint256 _reclaimableDate = reclaimableDate[_platform][_repoId][_issueId];
+    uint256 _reclaimableAt = reclaimableAt[_platform][_repoId][_issueId];
 
-    if (_reclaimableDate == 0) {
-      // first bounty for this token on this issue so set the reclaimableDate
-      reclaimableDate[_platform][_repoId][_issueId] =
-        block.timestamp + RECLAIM_START;
+    if (_reclaimableAt == 0) {
+      // first bounty for this token on this issue so set the reclaimableAt
+      _reclaimableAt = block.timestamp + RECLAIM_START;
+      reclaimableAt[_platform][_repoId][_issueId] = _reclaimableAt;
     }
 
     // transfer tokens from the msg sender to this contract and record the bounty amount
@@ -249,7 +246,8 @@ contract Bounties is
       ERC20(_tokenContract).symbol(),
       ERC20(_tokenContract).decimals(),
       _bountyAmount,
-      _fee
+      _fee,
+      _reclaimableAt
     );
     // TOOD: what if the issue was already closed be we aren't tracking it??? FE could check...
   }
@@ -271,6 +269,25 @@ contract Bounties is
 
     // not found, so add it
     bountyTokens[_platformId][_repoId][_issueId].push(_tokenContract);
+  }
+
+  function _maybeRemoveBountyToken(
+    string calldata _platformId,
+    string calldata _repoId,
+    string calldata _issueId,
+    address _tokenContract
+  ) private {
+    if (bounties[_platformId][_repoId][_issueId][_tokenContract] == 0) {
+      address[] storage _bountyTokens = bountyTokens[_platformId][_repoId][_issueId];
+
+      for (uint256 i = 0; i < _bountyTokens.length; i++) {
+        if (_bountyTokens[i] == _tokenContract) {
+          _bountyTokens[i] = _bountyTokens[_bountyTokens.length - 1];
+          _bountyTokens.pop();
+          return;
+        }
+      }
+    }
   }
 
   function _validateSignature(
@@ -315,15 +332,13 @@ contract Bounties is
     string calldata _issueId,
     address _tokenContract
   ) public whenNotPaused issueNotClosed(_platformId, _repoId, _issueId) {
-    uint256 _reclaimWindowStart =
-      reclaimableDate[_platformId][_repoId][_issueId];
+    uint256 _reclaimWindowStart = reclaimableAt[_platformId][_repoId][_issueId];
 
     if (block.timestamp <= _reclaimWindowStart) {
       revert TimeframeError(_reclaimWindowStart);
     }
 
-    uint256 _amount = bountyContributions[_platformId][_repoId][_issueId][_tokenContract][msg
-      .sender];
+    uint256 _amount = bountyContributions[_platformId][_repoId][_issueId][_tokenContract][msg.sender];
 
     if (_amount == 0) {
       address[] memory _tokens = new address[](1);
@@ -334,22 +349,9 @@ contract Bounties is
     ERC20 token = ERC20(_tokenContract);
     token.transfer(msg.sender, _amount);
 
-    bountyContributions[_platformId][_repoId][_issueId][_tokenContract][msg
-      .sender] = 0;
+    bountyContributions[_platformId][_repoId][_issueId][_tokenContract][msg.sender] = 0;
     bounties[_platformId][_repoId][_issueId][_tokenContract] -= _amount;
-
-    // TODO: re-add this if we can reduce contract size
-    // if (bounties[_platformId][_repoId][_issueId][_tokenContract] == 0) {
-    //   address[] storage _bountyTokens = bountyTokens[_platformId][_repoId][_issueId];
-
-    //   for (uint256 i = 0; i < _bountyTokens.length; i++) {
-    //     if (_bountyTokens[i] == _tokenContract) {
-    //       _bountyTokens[i] = _bountyTokens[_bountyTokens.length - 1];
-    //       _bountyTokens.pop();
-    //       return;
-    //     }
-    //   }
-    // }
+    _maybeRemoveBountyToken(_platformId, _repoId, _issueId, _tokenContract);
 
     emit BountyReclaim(
       _platformId,
@@ -565,7 +567,7 @@ contract Bounties is
     address[] calldata _tokens
   ) public onlyRole(FINANCE_ROLE) whenNotPaused {
     uint256 _reclaimWindowEnd =
-      reclaimableDate[_platformId][_repoId][_issueId] + RECLAIM_DAYS;
+      reclaimableAt[_platformId][_repoId][_issueId] + RECLAIM_DAYS;
 
     if (block.timestamp <= _reclaimWindowEnd) {
       revert TimeframeError(_reclaimWindowEnd);
