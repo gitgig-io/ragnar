@@ -829,7 +829,7 @@ describe("Bounties", () => {
         .to.be.revertedWithCustomError(bounties, "AccessControlUnauthorizedAccount");
     });
 
-    it('should emit FeeWithdraw event', async () => {
+    it('should emit Withdraw event', async () => {
       const { bounties, bountiesConfig, platformId, repoId, issueId, issuer, usdc, finance } = await claimableLinkedBountyFixture();
       const amount = 500;
       await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, usdc });
@@ -837,20 +837,85 @@ describe("Bounties", () => {
 
       // when / then
       await expect(bounties.connect(finance).withdrawFees(await usdc.getAddress()))
-        .to.emit(bounties, "FeeWithdraw")
+        .to.emit(bounties, "Withdraw")
         .withArgs(
           await usdc.getAddress(),
           await usdc.symbol(),
           await usdc.decimals(),
           finance.address,
-          expectedFee
+          expectedFee,
+          "fee"
         );
     });
 
-    it('should not emit FeeWithdraw event when no fees', async () => {
+    it('should revert when no fees', async () => {
       const { bounties, finance, usdc } = await claimableLinkedBountyFixture();
       await expect(bounties.connect(finance).withdrawFees(usdc.getAddress()))
-        .to.not.emit(bounties, "FeeWithdraw");
+        .to.be.revertedWithCustomError(bounties, "NoAmount");
+    });
+  });
+
+  describe("WithdrawUnsupportedToken", () => {
+    const SUPPLY = 1_000_000;
+
+    async function tokenFixture(recipient: string) {
+      const TestERC20Factory = await ethers.getContractFactory("TestERC20");
+      const token = await TestERC20Factory.deploy("Test", "TEST", 6, SUPPLY, recipient);
+      return { token };
+    }
+
+    it('should allow finance team to withdraw', async () => {
+      const { bounties, finance } = await bountiesFixture();
+      const { token } = await tokenFixture(await bounties.getAddress());
+
+      // when
+      await bounties.connect(finance).withdrawUnsupportedToken(await token.getAddress());
+
+      // then
+      expect(await token.balanceOf(await finance.getAddress())).to.be.eq(SUPPLY);
+    });
+
+    it('should not allow withdraw of supported token', async () => {
+      const { bounties, finance, usdc } = await bountiesFixture();
+
+      // when/then
+      await expect(bounties.connect(finance).withdrawUnsupportedToken(await usdc.getAddress()))
+        .to.be.revertedWithCustomError(bounties, "TokenSupportError");
+    });
+
+    it('should revert when attempted by non-finance team', async () => {
+      const { bounties, custodian } = await bountiesFixture();
+      const { token } = await tokenFixture(await bounties.getAddress());
+
+      // when/then
+      await expect(bounties.connect(custodian).withdrawUnsupportedToken(await token.getAddress()))
+        .to.be.revertedWithCustomError(bounties, "AccessControlUnauthorizedAccount");
+    });
+
+    it('should emit Withdraw event', async () => {
+      const { bounties, finance } = await bountiesFixture();
+      const { token } = await tokenFixture(await bounties.getAddress());
+
+      // when / then
+      await expect(bounties.connect(finance).withdrawUnsupportedToken(await token.getAddress()))
+        .to.emit(bounties, "Withdraw")
+        .withArgs(
+          await token.getAddress(),
+          await token.symbol(),
+          await token.decimals(),
+          finance.address,
+          SUPPLY,
+          "unsupported"
+        );
+    });
+
+    it('should revert when no fees', async () => {
+      const { bounties, issuer, finance } = await bountiesFixture();
+      const { token } = await tokenFixture(issuer.address);
+
+      // when / then
+      await expect(bounties.connect(finance).withdrawUnsupportedToken(await token.getAddress()))
+        .to.be.revertedWithCustomError(bounties, "NoAmount");
     });
   });
 

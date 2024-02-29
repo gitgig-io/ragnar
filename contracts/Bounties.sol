@@ -57,12 +57,13 @@ contract Bounties is
     uint256 amount
   );
 
-  event FeeWithdraw(
+  event Withdraw(
     address token,
     string symbol,
     uint8 decimals,
     address recipient,
-    uint256 amount
+    uint256 amount,
+    string kind
   );
 
   event BountySweep(
@@ -92,9 +93,10 @@ contract Bounties is
   error InvalidResolver(string platformId, string repoId, string issueId, address claimer);
   error InvalidSignature();
   error IssueClosed(string platformId, string repoId, string issueId);
-  error TokenSupportError(address token, bool supported);
+  error NoAmount(address token);
   error NoBounty(string platformId, string repoId, string issueId, address[] tokens);
   error TimeframeError(uint256 eligibleAt);
+  error TokenSupportError(address token, bool supported);
 
   // roles
   bytes32 public constant CUSTODIAN_ADMIN_ROLE = keccak256("CUSTODIAN_ADMIN_ROLE");
@@ -541,21 +543,39 @@ contract Bounties is
   }
 
   function withdrawFees(address _tokenContract) public onlyRole(FINANCE_ROLE) {
-    address _recipient = msg.sender;
+    ERC20 _token = ERC20(_tokenContract);
     uint256 _amount = fees[_tokenContract];
+    fees[_tokenContract] -= _amount;
+    _withdraw(_token, _amount, msg.sender, "fee");
+  }
 
-    if (_amount > 0) {
-      ERC20(_tokenContract).transfer(_recipient, _amount);
-      fees[_tokenContract] -= _amount;
-
-      emit FeeWithdraw(
-        _tokenContract,
-        ERC20(_tokenContract).symbol(),
-        ERC20(_tokenContract).decimals(),
-        _recipient,
-        _amount
-      );
+  function withdrawUnsupportedToken(address _tokenContract) public onlyRole(FINANCE_ROLE) {
+    if (_getConfig().isSupportedToken(_tokenContract)) {
+      revert TokenSupportError(_tokenContract, true);
     }
+
+    ERC20 _token = ERC20(_tokenContract);
+    uint256 _amount = _token.balanceOf(address(this));
+    _withdraw(_token, _amount, msg.sender, "unsupported");
+  }
+
+  function _withdraw(ERC20 _token, uint256 _amount, address _recipient, string memory _kind) private {
+    address _tokenContract = address(_token);
+
+    if (_amount == 0) {
+      revert NoAmount(_tokenContract);
+    }
+
+    _token.transfer(_recipient, _amount);
+
+    emit Withdraw(
+      _tokenContract,
+      _token.symbol(),
+      _token.decimals(),
+      _recipient,
+      _amount,
+      _kind
+    );
   }
 
   // this takes a list of tokens to sweep to allow for granular sweeps
