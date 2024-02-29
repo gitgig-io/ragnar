@@ -3,6 +3,11 @@
     "inputs": [
       {
         "internalType": "address",
+        "name": "_configContract",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
         "name": "_custodian",
         "type": "address"
       },
@@ -10,21 +15,6 @@
         "internalType": "address",
         "name": "_finance",
         "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "_notary",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "_identityContract",
-        "type": "address"
-      },
-      {
-        "internalType": "address[]",
-        "name": "_supportedTokens",
-        "type": "address[]"
       }
     ],
     "stateMutability": "nonpayable",
@@ -160,28 +150,6 @@
   {
     "inputs": [
       {
-        "internalType": "address",
-        "name": "addr",
-        "type": "address"
-      }
-    ],
-    "name": "InvalidAddress",
-    "type": "error"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint8",
-        "name": "fee",
-        "type": "uint8"
-      }
-    ],
-    "name": "InvalidFee",
-    "type": "error"
-  },
-  {
-    "inputs": [
-      {
         "internalType": "string",
         "name": "platformId",
         "type": "string"
@@ -234,6 +202,17 @@
       }
     ],
     "name": "IssueClosed",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "token",
+        "type": "address"
+      }
+    ],
+    "name": "NoAmount",
     "type": "error"
   },
   {
@@ -293,7 +272,7 @@
     "inputs": [
       {
         "internalType": "uint256",
-        "name": "eligibleDate",
+        "name": "eligibleAt",
         "type": "uint256"
       }
     ],
@@ -335,6 +314,12 @@
         "indexed": false,
         "internalType": "string",
         "name": "issue",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "platformUserId",
         "type": "string"
       },
       {
@@ -432,6 +417,12 @@
         "indexed": false,
         "internalType": "uint256",
         "name": "fee",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "reclaimableAt",
         "type": "uint256"
       }
     ],
@@ -554,60 +545,11 @@
       {
         "indexed": false,
         "internalType": "address",
-        "name": "notary",
+        "name": "configContract",
         "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "identityContract",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint8",
-        "name": "serviceFee",
-        "type": "uint8"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint8",
-        "name": "maintainerFee",
-        "type": "uint8"
       }
     ],
     "name": "ConfigChange",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "wallet",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "string",
-        "name": "feeType",
-        "type": "string"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint8",
-        "name": "fee",
-        "type": "uint8"
-      },
-      {
-        "indexed": false,
-        "internalType": "bool",
-        "name": "enabled",
-        "type": "bool"
-      }
-    ],
-    "name": "CustomFeeChange",
     "type": "event"
   },
   {
@@ -664,43 +606,6 @@
     "anonymous": false,
     "inputs": [],
     "name": "EIP712DomainChanged",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "token",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "string",
-        "name": "symbol",
-        "type": "string"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint8",
-        "name": "decimals",
-        "type": "uint8"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "recipient",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      }
-    ],
-    "name": "FeeWithdraw",
     "type": "event"
   },
   {
@@ -851,10 +756,17 @@
     "inputs": [
       {
         "indexed": false,
-        "internalType": "bool",
-        "name": "supported",
-        "type": "bool"
-      },
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      }
+    ],
+    "name": "Unpaused",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
       {
         "indexed": false,
         "internalType": "address",
@@ -872,22 +784,27 @@
         "internalType": "uint8",
         "name": "decimals",
         "type": "uint8"
-      }
-    ],
-    "name": "TokenSupportChange",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
+      },
       {
         "indexed": false,
         "internalType": "address",
-        "name": "account",
+        "name": "recipient",
         "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "kind",
+        "type": "string"
       }
     ],
-    "name": "Unpaused",
+    "name": "Withdraw",
     "type": "event"
   },
   {
@@ -983,46 +900,7 @@
   },
   {
     "inputs": [],
-    "name": "TRUSTED_CONTRACT_ADMIN_ROLE",
-    "outputs": [
-      {
-        "internalType": "bytes32",
-        "name": "",
-        "type": "bytes32"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "TRUSTED_CONTRACT_ROLE",
-    "outputs": [
-      {
-        "internalType": "bytes32",
-        "name": "",
-        "type": "bytes32"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
     "name": "acceptDefaultAdminTransfer",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "_newToken",
-        "type": "address"
-      }
-    ],
-    "name": "addToken",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -1207,6 +1085,19 @@
     "type": "function"
   },
   {
+    "inputs": [],
+    "name": "configContract",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "inputs": [
       {
         "internalType": "string",
@@ -1227,30 +1118,6 @@
     "name": "contributorClaim",
     "outputs": [],
     "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "name": "customServiceFees",
-    "outputs": [
-      {
-        "internalType": "uint8",
-        "name": "fee",
-        "type": "uint8"
-      },
-      {
-        "internalType": "bool",
-        "name": "enabled",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -1287,25 +1154,6 @@
         "internalType": "uint48",
         "name": "",
         "type": "uint48"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "_wallet",
-        "type": "address"
-      }
-    ],
-    "name": "effectiveServiceFee",
-    "outputs": [
-      {
-        "internalType": "uint8",
-        "name": "",
-        "type": "uint8"
       }
     ],
     "stateMutability": "view",
@@ -1435,67 +1283,6 @@
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "identityContract",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "string",
-        "name": "_platform",
-        "type": "string"
-      },
-      {
-        "internalType": "string",
-        "name": "_repoId",
-        "type": "string"
-      },
-      {
-        "internalType": "string",
-        "name": "_issueId",
-        "type": "string"
-      }
-    ],
-    "name": "isIssueClosed",
-    "outputs": [
-      {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "name": "isSupportedToken",
-    "outputs": [
-      {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
     "inputs": [
       {
         "internalType": "string",
@@ -1562,32 +1349,6 @@
         "internalType": "uint256",
         "name": "",
         "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "maintainerFee",
-    "outputs": [
-      {
-        "internalType": "uint8",
-        "name": "",
-        "type": "uint8"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "notary",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
       }
     ],
     "stateMutability": "view",
@@ -1741,7 +1502,7 @@
         "type": "string"
       }
     ],
-    "name": "reclaimableDate",
+    "name": "reclaimableAt",
     "outputs": [
       {
         "internalType": "uint256",
@@ -1750,19 +1511,6 @@
       }
     ],
     "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "_removeToken",
-        "type": "address"
-      }
-    ],
-    "name": "removeToken",
-    "outputs": [],
-    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -1843,84 +1591,14 @@
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "serviceFee",
-    "outputs": [
-      {
-        "internalType": "uint8",
-        "name": "",
-        "type": "uint8"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
     "inputs": [
       {
         "internalType": "address",
-        "name": "_wallet",
-        "type": "address"
-      },
-      {
-        "internalType": "uint8",
-        "name": "_newServiceFee",
-        "type": "uint8"
-      }
-    ],
-    "name": "setCustomServiceFee",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "_newIdentity",
+        "name": "_configContract",
         "type": "address"
       }
     ],
-    "name": "setIdentity",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint8",
-        "name": "_newMaintainerFee",
-        "type": "uint8"
-      }
-    ],
-    "name": "setMaintainerFee",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "_newNotary",
-        "type": "address"
-      }
-    ],
-    "name": "setNotary",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint8",
-        "name": "_newServiceFee",
-        "type": "uint8"
-      }
-    ],
-    "name": "setServiceFee",
+    "name": "setConfigContract",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -1988,6 +1666,19 @@
       }
     ],
     "name": "withdrawFees",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_tokenContract",
+        "type": "address"
+      }
+    ],
+    "name": "withdrawUnsupportedToken",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

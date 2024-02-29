@@ -5,14 +5,15 @@ pragma solidity ^0.8.20;
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {AccessControlDefaultAdminRules} from "@openzeppelin/contracts/access/extensions/AccessControlDefaultAdminRules.sol";
+import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {PointsToken} from "./PointsToken.sol";
 import {ITokenSupportable} from "./ITokenSupportable.sol";
 import {Notarizable} from "./Notarizable.sol";
 import {IPointsTokenRegistry} from "./IPointsTokenRegistry.sol";
 
-// TODO: make this pausable?
 contract PointsTokenFactory is
     EIP712,
+    Pausable,
     AccessControlDefaultAdminRules,
     Notarizable
 {
@@ -59,7 +60,6 @@ contract PointsTokenFactory is
 
     event FeeWithdraw(address recipient, uint256 amount);
 
-    // TODO: add flag to limit transferability
     constructor(
         address _custodian,
         address _finance,
@@ -69,6 +69,7 @@ contract PointsTokenFactory is
         uint256 _totalSupply,
         uint256 _fee
     )
+        Pausable()
         AccessControlDefaultAdminRules(3 days, msg.sender)
         EIP712("GitGigPointsFactory", "1")
         Notarizable(_notary)
@@ -93,7 +94,7 @@ contract PointsTokenFactory is
         string calldata _platformId,
         string calldata _owner,
         bytes calldata _signature
-    ) external payable {
+    ) external payable whenNotPaused {
         _validateFee(msg.value);
         _validateSymbol(_symbol);
         _validateSignature(_name, _symbol, _platformId, _owner, _signature);
@@ -248,6 +249,14 @@ contract PointsTokenFactory is
         }
 
         _emitConfigChange();
+    }
+
+    function pause() external onlyRole(CUSTODIAN_ROLE) {
+      _pause();
+    }
+
+    function unpause() external onlyRole(CUSTODIAN_ROLE) {
+      _unpause();
     }
 
     // ------------------

@@ -201,6 +201,14 @@ describe("PointsTokenFactory", () => {
       expect(tx.hash).to.be.a.string;
     });
 
+    it("should revert when paused", async () => {
+      const { pointsFactory, custodian, issuer, notary } = await pFixture();
+      await pointsFactory.connect(custodian).pause();
+
+      await expect(createPointsToken(pointsFactory, issuer, notary))
+        .to.revertedWithCustomError(pointsFactory, "EnforcedPause");
+    });
+
     it("should revert if value is less than fee", async () => {
       const { pointsFactory, issuer, notary } = await pFixture();
       const value = FEE - ethers.toBigInt(1);
@@ -675,4 +683,68 @@ describe("PointsTokenFactory", () => {
         );
     });
   });
+
+  describe("Pause", () => {
+    it('should pause', async () => {
+      const { pointsFactory, custodian } = await pFixture();
+
+      // when
+      await pointsFactory.connect(custodian).pause();
+
+      // then
+      expect(await pointsFactory.paused()).to.be.true;
+    });
+
+    it('should emit Paused event', async () => {
+      const { pointsFactory, custodian } = await pFixture();
+
+      // when
+      await expect(pointsFactory.connect(custodian).pause())
+        .to.emit(pointsFactory, "Paused")
+        .withArgs(custodian.address);
+    });
+
+
+    it('should revert when called by non-custodian', async () => {
+      const { pointsFactory, finance } = await pFixture();
+
+      // when
+      await expect(pointsFactory.connect(finance).pause())
+        .to.be.revertedWithCustomError(pointsFactory, "AccessControlUnauthorizedAccount");
+    });
+  });
+
+  describe("Unpause", () => {
+    it('should unpause', async () => {
+      const { pointsFactory, custodian } = await pFixture();
+      await pointsFactory.connect(custodian).pause();
+      expect(await pointsFactory.paused()).to.be.true;
+
+      await pointsFactory.connect(custodian).unpause();
+
+      // then
+      expect(await pointsFactory.paused()).to.be.false;
+    });
+
+    it('should emit Unpaused event', async () => {
+      const { pointsFactory, custodian } = await pFixture();
+      await pointsFactory.connect(custodian).pause();
+      expect(await pointsFactory.paused()).to.be.true;
+
+      await expect(pointsFactory.connect(custodian).unpause())
+        .to.emit(pointsFactory, "Unpaused")
+        .withArgs(custodian.address);
+    });
+
+    it('should revert when called by non-custodian', async () => {
+      const { pointsFactory, custodian, finance } = await pFixture();
+      await pointsFactory.connect(custodian).pause();
+      expect(await pointsFactory.paused()).to.be.true;
+
+      // when
+      await expect(pointsFactory.connect(finance).unpause())
+        .to.be.revertedWithCustomError(pointsFactory, "AccessControlUnauthorizedAccount");
+    });
+  });
+
 });
