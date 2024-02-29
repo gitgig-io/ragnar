@@ -2,7 +2,7 @@
 
 pragma solidity ^0.8.20;
 
-interface IOrgTokenRegistry {
+interface IPointsTokenRegistry {
     function add(
         string calldata _platformId,
         string calldata _org,

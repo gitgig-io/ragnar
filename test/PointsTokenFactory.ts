@@ -3,7 +3,7 @@ import { ethers } from "hardhat";
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { createPointsTokenSignature } from "./helpers/signatureHelpers";
-import { OrgTokenRegistry, PointsTokenFactory } from "../typechain-types";
+import { PointsTokenRegistry, PointsTokenFactory } from "../typechain-types";
 
 const TOTAL_SUPPLY = 20_000_000 * 100; // * 100 because of two decimals
 const DECIMALS = 2;
@@ -30,19 +30,26 @@ describe("PointsTokenFactory", () => {
       "http://localhost:3000",
     );
 
-    const BountiesFactory = await ethers.getContractFactory("Bounties");
-    const bounties = await BountiesFactory.deploy(
+    const BountiesConfigFactory = await ethers.getContractFactory("BountiesConfig");
+    const bountiesConfig = await BountiesConfigFactory.deploy(
       custodian.address,
-      finance.address,
       notary.address,
       await identity.getAddress(),
-      [],
+      []
+    );
+
+    const BountiesFactory = await ethers.getContractFactory("Bounties");
+    const bounties = await BountiesFactory.deploy(
+      await bountiesConfig.getAddress(),
+      custodian.address,
+      finance.address,
     );
 
     return {
       owner,
       custodian,
       bounties,
+      bountiesConfig,
       identity,
       finance,
       notary,
@@ -54,20 +61,20 @@ describe("PointsTokenFactory", () => {
     };
   }
 
-  async function createOrgTokenRegistry(custodian: HardhatEthersSigner) {
-    const orgTokenRegistryFactory = await ethers.getContractFactory(
-      "OrgTokenRegistry",
+  async function createPointsTokenRegistry(custodian: HardhatEthersSigner) {
+    const pointsTokenRegistryFactory = await ethers.getContractFactory(
+      "PointsTokenRegistry",
     );
-    const orgTokenRegistry = await orgTokenRegistryFactory.deploy(custodian);
+    const pointsTokenRegistry = await pointsTokenRegistryFactory.deploy(custodian);
 
-    return orgTokenRegistry;
+    return pointsTokenRegistry;
   }
 
-  async function createpFactory(
+  async function createPointsTokenFactory(
     custodian: HardhatEthersSigner,
     finance: HardhatEthersSigner,
     notary: HardhatEthersSigner,
-    registry: OrgTokenRegistry,
+    registry: PointsTokenRegistry,
   ) {
     const pointsFactoryFactory = await ethers.getContractFactory(
       "PointsTokenFactory",
@@ -90,6 +97,7 @@ describe("PointsTokenFactory", () => {
       owner,
       custodian,
       bounties,
+      bountiesConfig,
       identity,
       finance,
       notary,
@@ -100,19 +108,19 @@ describe("PointsTokenFactory", () => {
       contributor3,
     } = await bountiesFixture();
 
-    const registry = await createOrgTokenRegistry(custodian);
+    const registry = await createPointsTokenRegistry(custodian);
 
-    const pointsFactory = await createpFactory(
+    const pointsFactory = await createPointsTokenFactory(
       custodian,
       finance,
       notary,
       registry,
     );
 
-    await pointsFactory.connect(custodian).addBountiesContract(bounties);
-    await bounties
+    await pointsFactory.connect(custodian).addBountiesConfigContract(bountiesConfig);
+    await bountiesConfig
       .connect(custodian)
-      .grantRole(await bounties.TRUSTED_CONTRACT_ROLE(), pointsFactory);
+      .grantRole(await bountiesConfig.TRUSTED_CONTRACT_ROLE(), pointsFactory);
 
     registry
       .connect(custodian)
@@ -125,6 +133,7 @@ describe("PointsTokenFactory", () => {
       owner,
       custodian,
       bounties,
+      bountiesConfig,
       identity,
       pointsFactory,
       registry,
@@ -179,7 +188,7 @@ describe("PointsTokenFactory", () => {
   }
 
   describe("Deployment", () => {
-    it("should be able to deploy contribution points factory contract", async () => {
+    it("should be able to deploy points factory contract", async () => {
       const { pointsFactory } = await pFixture();
       expect(pointsFactory.getAddress()).to.be.a.string;
     });
@@ -209,8 +218,7 @@ describe("PointsTokenFactory", () => {
     });
 
     it("should register token as a supported token on bounties contract", async () => {
-      const { bounties, pointsFactory, issuer, notary, registry } =
-        await pFixture();
+      const { bountiesConfig, pointsFactory, issuer, notary, registry } = await pFixture();
       let tokenAddr = await registry.getContract("1", "GitGig", "pTST");
       expect(tokenAddr).to.equal(ethers.ZeroAddress);
 
@@ -220,7 +228,7 @@ describe("PointsTokenFactory", () => {
       // then
       tokenAddr = await registry.getContract("1", "GitGig", "pTST");
       expect(tokenAddr).to.not.equal(ethers.ZeroAddress);
-      expect(await bounties.isSupportedToken(tokenAddr)).to.be.true;
+      expect(await bountiesConfig.isSupportedToken(tokenAddr)).to.be.true;
     });
 
     it("should emit PointsTokenCreate event", async () => {
@@ -299,7 +307,7 @@ describe("PointsTokenFactory", () => {
         .to.not.equal(ethers.ZeroAddress);
     });
 
-    it("should revert when org already has symbol", async () => {
+    it("should revert when owner already has symbol", async () => {
       const { pointsFactory, issuer, notary, registry } = await pFixture();
       await createPointsToken(pointsFactory, issuer, notary);
 
@@ -311,8 +319,8 @@ describe("PointsTokenFactory", () => {
   describe("Add Bounties Contract", () => {
     it("should add contract to bountiesContracts", async () => {
       const { bounties, custodian, finance, notary } = await bountiesFixture();
-      const registry = await createOrgTokenRegistry(custodian);
-      const pointsFactory = await createpFactory(
+      const registry = await createPointsTokenRegistry(custodian);
+      const pointsFactory = await createPointsTokenFactory(
         custodian,
         finance,
         notary,
@@ -321,18 +329,18 @@ describe("PointsTokenFactory", () => {
       const bountiesAddr = await bounties.getAddress();
 
       // ensure not there
-      await expect(pointsFactory.bountiesContracts(0)).to.be.reverted;
+      await expect(pointsFactory.bountiesConfigContracts(0)).to.be.reverted;
 
       // when
-      await pointsFactory.connect(custodian).addBountiesContract(bountiesAddr);
+      await pointsFactory.connect(custodian).addBountiesConfigContract(bountiesAddr);
 
-      expect(await pointsFactory.bountiesContracts(0)).to.equal(bountiesAddr);
+      expect(await pointsFactory.bountiesConfigContracts(0)).to.equal(bountiesAddr);
     });
 
     it("should not allow contract to be added twice", async () => {
       const { bounties, custodian, finance, notary } = await bountiesFixture();
-      const registry = await createOrgTokenRegistry(custodian);
-      const pointsFactory = await createpFactory(
+      const registry = await createPointsTokenRegistry(custodian);
+      const pointsFactory = await createPointsTokenFactory(
         custodian,
         finance,
         notary,
@@ -341,14 +349,14 @@ describe("PointsTokenFactory", () => {
       const bountiesAddr = await bounties.getAddress();
 
       // ensure not there
-      await expect(pointsFactory.bountiesContracts(0)).to.be.reverted;
+      await expect(pointsFactory.bountiesConfigContracts(0)).to.be.reverted;
 
       // when
-      await pointsFactory.connect(custodian).addBountiesContract(bountiesAddr);
+      await pointsFactory.connect(custodian).addBountiesConfigContract(bountiesAddr);
 
       // then
       await expect(
-        pointsFactory.connect(custodian).addBountiesContract(bountiesAddr),
+        pointsFactory.connect(custodian).addBountiesConfigContract(bountiesAddr),
       )
         .to.be.revertedWithCustomError(pointsFactory, "InvalidArgument");
     });
@@ -356,8 +364,8 @@ describe("PointsTokenFactory", () => {
     it("should revert when called by non-custodian", async () => {
       const { bounties, custodian, finance, issuer, notary } =
         await bountiesFixture();
-      const registry = await createOrgTokenRegistry(custodian);
-      const pointsFactory = await createpFactory(
+      const registry = await createPointsTokenRegistry(custodian);
+      const pointsFactory = await createPointsTokenFactory(
         custodian,
         finance,
         notary,
@@ -366,11 +374,11 @@ describe("PointsTokenFactory", () => {
       const bountiesAddr = await bounties.getAddress();
 
       // ensure not there
-      await expect(pointsFactory.bountiesContracts(0)).to.be.reverted;
+      await expect(pointsFactory.bountiesConfigContracts(0)).to.be.reverted;
 
       // when
       await expect(
-        pointsFactory.connect(issuer).addBountiesContract(bountiesAddr),
+        pointsFactory.connect(issuer).addBountiesConfigContract(bountiesAddr),
       )
         .to.be.revertedWithCustomError(
           pointsFactory,
@@ -378,13 +386,13 @@ describe("PointsTokenFactory", () => {
         );
 
       // still not there
-      await expect(pointsFactory.bountiesContracts(0)).to.be.reverted;
+      await expect(pointsFactory.bountiesConfigContracts(0)).to.be.reverted;
     });
 
     it("should emit ConfigChange event", async () => {
       const { bounties, custodian, finance, notary } = await bountiesFixture();
-      const registry = await createOrgTokenRegistry(custodian);
-      const pointsFactory = await createpFactory(
+      const registry = await createPointsTokenRegistry(custodian);
+      const pointsFactory = await createPointsTokenFactory(
         custodian,
         finance,
         notary,
@@ -394,17 +402,17 @@ describe("PointsTokenFactory", () => {
 
       // when/then
       await expect(
-        pointsFactory.connect(custodian).addBountiesContract(bountiesAddr),
+        pointsFactory.connect(custodian).addBountiesConfigContract(bountiesAddr),
       )
         .to.emit(pointsFactory, "ConfigChange");
     });
   });
 
-  describe("Remove Bounties Contract", () => {
+  describe("Remove Bounties Config Contract", () => {
     it("should remove contract from bountiesContracts", async () => {
       const { bounties, custodian, finance, notary } = await bountiesFixture();
-      const registry = await createOrgTokenRegistry(custodian);
-      const pointsFactory = await createpFactory(
+      const registry = await createPointsTokenRegistry(custodian);
+      const pointsFactory = await createPointsTokenFactory(
         custodian,
         finance,
         notary,
@@ -412,21 +420,21 @@ describe("PointsTokenFactory", () => {
       );
       const bountiesAddr = await bounties.getAddress();
 
-      await pointsFactory.connect(custodian).addBountiesContract(bountiesAddr);
-      expect(await pointsFactory.bountiesContracts(0)).to.equal(bountiesAddr);
+      await pointsFactory.connect(custodian).addBountiesConfigContract(bountiesAddr);
+      expect(await pointsFactory.bountiesConfigContracts(0)).to.equal(bountiesAddr);
 
       // when
-      await pointsFactory.connect(custodian).removeBountiesContract(
+      await pointsFactory.connect(custodian).removeBountiesConfigContract(
         bountiesAddr,
       );
 
-      await expect(pointsFactory.bountiesContracts(0)).to.be.reverted;
+      await expect(pointsFactory.bountiesConfigContracts(0)).to.be.reverted;
     });
 
     it("should revert when contract not in bountiesContracts", async () => {
       const { bounties, custodian, finance, notary } = await bountiesFixture();
-      const registry = await createOrgTokenRegistry(custodian);
-      const pointsFactory = await createpFactory(
+      const registry = await createPointsTokenRegistry(custodian);
+      const pointsFactory = await createPointsTokenFactory(
         custodian,
         finance,
         notary,
@@ -436,7 +444,7 @@ describe("PointsTokenFactory", () => {
 
       // when
       await expect(
-        pointsFactory.connect(custodian).removeBountiesContract(bountiesAddr),
+        pointsFactory.connect(custodian).removeBountiesConfigContract(bountiesAddr),
       )
         .to.be.revertedWithCustomError(pointsFactory, "InvalidArgument");
     });
@@ -444,8 +452,8 @@ describe("PointsTokenFactory", () => {
     it("should revert when called by non-custodian", async () => {
       const { bounties, custodian, finance, issuer, notary } =
         await bountiesFixture();
-      const registry = await createOrgTokenRegistry(custodian);
-      const pointsFactory = await createpFactory(
+      const registry = await createPointsTokenRegistry(custodian);
+      const pointsFactory = await createPointsTokenFactory(
         custodian,
         finance,
         notary,
@@ -453,12 +461,12 @@ describe("PointsTokenFactory", () => {
       );
       const bountiesAddr = await bounties.getAddress();
 
-      await pointsFactory.connect(custodian).addBountiesContract(bountiesAddr);
-      expect(await pointsFactory.bountiesContracts(0)).to.equal(bountiesAddr);
+      await pointsFactory.connect(custodian).addBountiesConfigContract(bountiesAddr);
+      expect(await pointsFactory.bountiesConfigContracts(0)).to.equal(bountiesAddr);
 
       // when
       await expect(
-        pointsFactory.connect(issuer).removeBountiesContract(bountiesAddr),
+        pointsFactory.connect(issuer).removeBountiesConfigContract(bountiesAddr),
       )
         .to.be.revertedWithCustomError(
           pointsFactory,
@@ -466,13 +474,13 @@ describe("PointsTokenFactory", () => {
         );
 
       // then
-      expect(await pointsFactory.bountiesContracts(0)).to.equal(bountiesAddr);
+      expect(await pointsFactory.bountiesConfigContracts(0)).to.equal(bountiesAddr);
     });
 
     it("should emit ConfigChange event", async () => {
       const { bounties, custodian, finance, notary } = await bountiesFixture();
-      const registry = await createOrgTokenRegistry(custodian);
-      const pointsFactory = await createpFactory(
+      const registry = await createPointsTokenRegistry(custodian);
+      const pointsFactory = await createPointsTokenFactory(
         custodian,
         finance,
         notary,
@@ -480,12 +488,12 @@ describe("PointsTokenFactory", () => {
       );
       const bountiesAddr = await bounties.getAddress();
 
-      await pointsFactory.connect(custodian).addBountiesContract(bountiesAddr);
-      expect(await pointsFactory.bountiesContracts(0)).to.equal(bountiesAddr);
+      await pointsFactory.connect(custodian).addBountiesConfigContract(bountiesAddr);
+      expect(await pointsFactory.bountiesConfigContracts(0)).to.equal(bountiesAddr);
 
       // when/then
       await expect(
-        pointsFactory.connect(custodian).removeBountiesContract(bountiesAddr),
+        pointsFactory.connect(custodian).removeBountiesConfigContract(bountiesAddr),
       )
         .to.emit(pointsFactory, "ConfigChange");
     });
@@ -573,7 +581,7 @@ describe("PointsTokenFactory", () => {
   describe("Set Registry", () => {
     it("should update registry", async () => {
       const { pointsFactory, custodian } = await pFixture();
-      const registry = await createOrgTokenRegistry(custodian);
+      const registry = await createPointsTokenRegistry(custodian);
       const regAddr = await registry.getAddress();
 
       await pointsFactory.connect(custodian).setRegistry(regAddr);
@@ -592,7 +600,7 @@ describe("PointsTokenFactory", () => {
 
     it("should emit ConfigChange event", async () => {
       const { pointsFactory, custodian } = await pFixture();
-      const registry = await createOrgTokenRegistry(custodian);
+      const registry = await createPointsTokenRegistry(custodian);
       const regAddr = await registry.getAddress();
 
       await expect(pointsFactory.connect(custodian).setRegistry(regAddr))

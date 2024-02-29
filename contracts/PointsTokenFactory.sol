@@ -8,10 +8,9 @@ import {AccessControlDefaultAdminRules} from "@openzeppelin/contracts/access/ext
 import {PointsToken} from "./PointsToken.sol";
 import {ITokenSupportable} from "./ITokenSupportable.sol";
 import {Notarizable} from "./Notarizable.sol";
-import {IOrgTokenRegistry} from "./IOrgTokenRegistry.sol";
+import {IPointsTokenRegistry} from "./IPointsTokenRegistry.sol";
 
 // TODO: make this pausable?
-// TODO: make the token contract configurable?
 contract PointsTokenFactory is
     EIP712,
     AccessControlDefaultAdminRules,
@@ -20,19 +19,17 @@ contract PointsTokenFactory is
     uint256 public fee;
     uint8 public dec;
     uint256 public totalSupply;
-    address[] public bountiesContracts;
+    address[] public bountiesConfigContracts;
     address public registry;
 
-    bytes32 public constant CUSTODIAN_ADMIN_ROLE =
-        keccak256("CUSTODIAN_ADMIN_ROLE");
+    bytes32 public constant CUSTODIAN_ADMIN_ROLE = keccak256("CUSTODIAN_ADMIN_ROLE");
     bytes32 public constant CUSTODIAN_ROLE = keccak256("CUSTODIAN_ROLE");
-    bytes32 public constant FINANCE_ADMIN_ROLE =
-        keccak256("FINANCE_ADMIN_ROLE");
+    bytes32 public constant FINANCE_ADMIN_ROLE = keccak256("FINANCE_ADMIN_ROLE");
     bytes32 public constant FINANCE_ROLE = keccak256("FINANCE_ROLE");
 
     bytes32 private constant TYPE_HASH =
         keccak256(
-            "CreatePointsToken(string name,string symbol,string platform,string org,address creator)"
+            "CreatePointsToken(string name,string symbol,string platform,string owner,address creator)"
         );
 
     error InvalidSignature();
@@ -48,14 +45,14 @@ contract PointsTokenFactory is
         uint256 totalSupply,
         address creator,
         string platform,
-        string org
+        string owner
     );
 
     event ConfigChange(
         uint256 fee,
         uint8 decimals,
         uint256 totalSupply,
-        address[] bountiesContracts,
+        address[] bountiesConfigContracts,
         address registry,
         address notary
     );
@@ -94,32 +91,32 @@ contract PointsTokenFactory is
         string calldata _name,
         string calldata _symbol,
         string calldata _platformId,
-        string calldata _org,
+        string calldata _owner,
         bytes calldata _signature
     ) public payable {
         _validateFee(msg.value);
         _validateSymbol(_symbol);
-        _validateSignature(_name, _symbol, _platformId, _org, _signature);
+        _validateSignature(_name, _symbol, _platformId, _owner, _signature);
 
         address _pToken = address(
             new PointsToken(
                 _name,
                 _symbol,
                 _platformId,
-                _org,
+                _owner,
                 dec,
                 totalSupply,
                 msg.sender
             )
         );
 
-        for (uint256 i = 0; i < bountiesContracts.length; i++) {
-            ITokenSupportable(bountiesContracts[i]).addToken(_pToken);
+        for (uint256 i = 0; i < bountiesConfigContracts.length; i++) {
+            ITokenSupportable(bountiesConfigContracts[i]).addToken(_pToken);
         }
 
         // add symbol to registry
-        // this will fail if the symbol already exists in the org
-        IOrgTokenRegistry(registry).add(_platformId, _org, _symbol, _pToken);
+        // this will fail if the symbol already exists in the owner
+        IPointsTokenRegistry(registry).add(_platformId, _owner, _symbol, _pToken);
 
         emit PointsTokenCreate(
             _pToken,
@@ -129,7 +126,7 @@ contract PointsTokenFactory is
             totalSupply,
             msg.sender,
             _platformId,
-            _org
+            _owner
         );
     }
 
@@ -149,7 +146,7 @@ contract PointsTokenFactory is
         string calldata _name,
         string calldata _symbol,
         string calldata _platformId,
-        string calldata _org,
+        string calldata _owner,
         bytes calldata _signature
     ) private view {
         bytes32 _digest = _hashTypedDataV4(
@@ -159,7 +156,7 @@ contract PointsTokenFactory is
                     keccak256(bytes(_name)),
                     keccak256(bytes(_symbol)),
                     keccak256(bytes(_platformId)),
-                    keccak256(bytes(_org)),
+                    keccak256(bytes(_owner)),
                     msg.sender
                 )
             )
@@ -225,32 +222,32 @@ contract PointsTokenFactory is
         emitConfigChange();
     }
 
-    function addBountiesContract(address _bounties)
+    function addBountiesConfigContract(address _bounties)
         public
         onlyRole(CUSTODIAN_ROLE)
     {
-        for (uint256 i = 0; i < bountiesContracts.length; i++) {
-            if (bountiesContracts[i] == _bounties) {
+        for (uint256 i = 0; i < bountiesConfigContracts.length; i++) {
+            if (bountiesConfigContracts[i] == _bounties) {
                 revert InvalidArgument();
             }
         }
 
-        bountiesContracts.push(_bounties);
+        bountiesConfigContracts.push(_bounties);
         emitConfigChange();
     }
 
-    function removeBountiesContract(address _bounties)
+    function removeBountiesConfigContract(address _bounties)
         public
         onlyRole(CUSTODIAN_ROLE)
     {
         bool _found = false;
-        // find _bounties in the bountiesContracts list
-        for (uint256 i = 0; i < bountiesContracts.length; i++) {
-            if (bountiesContracts[i] == _bounties) {
-                bountiesContracts[i] = bountiesContracts[
-                    bountiesContracts.length - 1
+        // find _bounties in the bountiesConfigContracts list
+        for (uint256 i = 0; i < bountiesConfigContracts.length; i++) {
+            if (bountiesConfigContracts[i] == _bounties) {
+                bountiesConfigContracts[i] = bountiesConfigContracts[
+                    bountiesConfigContracts.length - 1
                 ];
-                bountiesContracts.pop();
+                bountiesConfigContracts.pop();
                 _found = true;
             }
         }
@@ -280,7 +277,7 @@ contract PointsTokenFactory is
             fee,
             dec,
             totalSupply,
-            bountiesContracts,
+            bountiesConfigContracts,
             registry,
             notary
         );

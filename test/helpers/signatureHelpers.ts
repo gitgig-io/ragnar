@@ -86,7 +86,7 @@ export async function createPointsTokenSignature(cpFactory: PointsTokenFactory, 
       { name: "name", type: "string" },
       { name: "symbol", type: "string" },
       { name: "platform", type: "string" },
-      { name: "org", type: "string" },
+      { name: "owner", type: "string" },
       { name: "creator", type: "address" },
     ]
   };
@@ -95,7 +95,7 @@ export async function createPointsTokenSignature(cpFactory: PointsTokenFactory, 
     name: params[0] as string,
     symbol: params[1] as string,
     platform: params[2] as string,
-    org: params[3] as string,
+    owner: params[3] as string,
     creator: params[4] as string,
   };
 
