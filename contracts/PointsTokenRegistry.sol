@@ -1,9 +1,9 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: BUSL-1.1
 
 pragma solidity ^0.8.20;
 
 import {AccessControlDefaultAdminRules} from "@openzeppelin/contracts/access/extensions/AccessControlDefaultAdminRules.sol";
-import {IPointsTokenRegistry} from "./IPointsTokenRegistry.sol";
+import {IPointsTokenRegistry} from "./interfaces/IPointsTokenRegistry.sol";
 
 contract PointsTokenRegistry is IPointsTokenRegistry, AccessControlDefaultAdminRules {
     // platformId -> owner -> symbol -> address

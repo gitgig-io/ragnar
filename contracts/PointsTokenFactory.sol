@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: BUSL-1.1
 
 pragma solidity ^0.8.20;
 
@@ -7,9 +7,9 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {AccessControlDefaultAdminRules} from "@openzeppelin/contracts/access/extensions/AccessControlDefaultAdminRules.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {PointsToken} from "./PointsToken.sol";
-import {ITokenSupportable} from "./ITokenSupportable.sol";
+import {ITokenSupportable} from "./interfaces/ITokenSupportable.sol";
 import {Notarizable} from "./Notarizable.sol";
-import {IPointsTokenRegistry} from "./IPointsTokenRegistry.sol";
+import {IPointsTokenRegistry} from "./interfaces/IPointsTokenRegistry.sol";
 
 contract PointsTokenFactory is
     EIP712,

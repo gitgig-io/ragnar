@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: BUSL-1.1
+
 pragma solidity ^0.8.20;
 
 import {ERC721, ERC721Enumerable, IERC721Enumerable} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
@@ -9,7 +10,7 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {AccessControlDefaultAdminRules} from "@openzeppelin/contracts/access/extensions/AccessControlDefaultAdminRules.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
-import {IIdentity, PlatformUser} from "./IIdentity.sol";
+import {IIdentity, PlatformUser} from "./interfaces/IIdentity.sol";
 import {Notarizable} from "./Notarizable.sol";
 
 contract Identity is
@@ -271,19 +272,19 @@ contract Identity is
 
     /** BEGIN NFT transfer overrides **/
 
-    function approve(address to, uint256 tokenId) override(ERC721,IERC721) public pure {
+    function approve(address, uint256) override(ERC721,IERC721) public pure {
       revert NotSupported();
     }
 
-    function setApprovalForAll(address operator, bool approved) override(ERC721,IERC721) public pure {
+    function setApprovalForAll(address, bool) override(ERC721,IERC721) public pure {
       revert NotSupported();
     }
 
-    function transferFrom(address from, address to, uint256 tokenId) override(ERC721,IERC721) public pure {
+    function transferFrom(address, address, uint256) override(ERC721,IERC721) public pure {
       revert NotSupported();
     }
 
-    function safeTransferFrom(address from, address to, uint256 tokenId, bytes memory data) override(ERC721,IERC721) public pure {
+    function safeTransferFrom(address, address, uint256, bytes memory) override(ERC721,IERC721) public pure {
       revert NotSupported();
     }
 

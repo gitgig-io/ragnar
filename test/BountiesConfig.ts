@@ -22,15 +22,19 @@ describe("BountiesConfig", () => {
     const IdentityFactory = await ethers.getContractFactory("Identity");
     const identity = await IdentityFactory.deploy(custodian.address, notary.address, "http://localhost:3000");
 
+    const ClaimValidatorFactory = await ethers.getContractFactory("StaticClaimValidator");
+    const claimValidator = await ClaimValidatorFactory.deploy(true);
+
     const BountiesConfigFactory = await ethers.getContractFactory("BountiesConfig");
     const config = await BountiesConfigFactory.deploy(
       custodian.address,
       notary.address,
       await identity.getAddress(),
+      await claimValidator.getAddress(),
       [usdcAddr, arbAddr, wethAddr]
     );
 
-    return { owner, custodian, config, identity, usdc, arb, weth, finance, notary, issuer, maintainer, contributor, contributor2, contributor3 };
+    return { owner, custodian, config, identity, claimValidator, usdc, arb, weth, finance, notary, issuer, maintainer, contributor, contributor2, contributor3 };
   }
 
   async function usdcFixture(issuer: HardhatEthersSigner) {
@@ -106,6 +110,51 @@ describe("BountiesConfig", () => {
     });
   });
 
+  describe("SetClaimValidator", () => {
+    it('should update claim validator', async () => {
+      const { config, custodian, finance } = await bountiesConfigFixture();
+
+      // when
+      const txn = await config.connect(custodian).setClaimValidator(finance.address);
+
+      // then
+      expect(txn.hash).to.be.a.string;
+      expect(await config.claimValidatorContract()).to.be.eq(finance.address);
+    });
+
+    it('should revert with invalid address', async () => {
+      const { config, custodian } = await bountiesConfigFixture();
+
+      // when/then
+      await expect(config.connect(custodian).setClaimValidator(ethers.ZeroAddress))
+        .to.be.revertedWithCustomError(config, "InvalidAddress")
+        .withArgs(ethers.ZeroAddress);
+    });
+
+    it('should emit ConfigChange event', async () => {
+      const { config, identity, custodian, finance, notary } = await bountiesConfigFixture();
+
+      // when
+      await expect(config.connect(custodian).setClaimValidator(finance.address))
+        .to.emit(config, "ConfigChange")
+        .withArgs(
+          notary.address,
+          await identity.getAddress(),
+          finance.address,
+          await config.serviceFee(),
+          await config.maintainerFee()
+        );
+    });
+
+    it('should not allow non-custodian to update', async () => {
+      const { config, finance } = await bountiesConfigFixture();
+
+      // when/then
+      await expect(config.connect(finance).setClaimValidator(finance.address))
+        .to.be.revertedWithCustomError(config, "AccessControlUnauthorizedAccount");
+    });
+  });
+
   describe("SetNotary", () => {
     it('should update notary', async () => {
       const { config, custodian, finance } = await bountiesConfigFixture();
@@ -128,7 +177,7 @@ describe("BountiesConfig", () => {
     });
 
     it('should emit ConfigChange event', async () => {
-      const { config, identity, custodian, finance } = await bountiesConfigFixture();
+      const { config, identity, claimValidator, custodian, finance } = await bountiesConfigFixture();
 
       // when
       await expect(config.connect(custodian).setNotary(finance.address))
@@ -136,6 +185,7 @@ describe("BountiesConfig", () => {
         .withArgs(
           await finance.getAddress(),
           await identity.getAddress(),
+          await claimValidator.getAddress(),
           await config.serviceFee(),
           await config.maintainerFee()
         );
@@ -172,7 +222,7 @@ describe("BountiesConfig", () => {
     });
 
     it('should emit ConfigChange event', async () => {
-      const { config, custodian, notary, issuer } = await bountiesConfigFixture();
+      const { config, custodian, claimValidator, notary, issuer } = await bountiesConfigFixture();
 
       // when
       await expect(config.connect(custodian).setIdentity(issuer.address))
@@ -180,6 +230,7 @@ describe("BountiesConfig", () => {
         .withArgs(
           await notary.getAddress(),
           await issuer.getAddress(),
+          await claimValidator.getAddress(),
           await config.serviceFee(),
           await config.maintainerFee()
         );
@@ -207,7 +258,7 @@ describe("BountiesConfig", () => {
     });
 
     it('should emit ConfigChange event', async () => {
-      const { config, identity, custodian, notary } = await bountiesConfigFixture();
+      const { config, identity, claimValidator, custodian, notary } = await bountiesConfigFixture();
 
       // when
       await expect(config.connect(custodian).setServiceFee(50))
@@ -215,6 +266,7 @@ describe("BountiesConfig", () => {
         .withArgs(
           await notary.getAddress(),
           await identity.getAddress(),
+          await claimValidator.getAddress(),
           50,
           await config.maintainerFee()
         );
@@ -345,7 +397,7 @@ describe("BountiesConfig", () => {
     });
 
     it('should emit ConfigChange event', async () => {
-      const { config, identity, custodian, notary } = await bountiesConfigFixture();
+      const { config, identity, claimValidator, custodian, notary } = await bountiesConfigFixture();
 
       // when
       await expect(config.connect(custodian).setMaintainerFee(50))
@@ -353,6 +405,7 @@ describe("BountiesConfig", () => {
         .withArgs(
           await notary.getAddress(),
           await identity.getAddress(),
+          await claimValidator.getAddress(),
           await config.serviceFee(),
           50
         );

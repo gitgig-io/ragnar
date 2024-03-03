@@ -1,11 +1,12 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: BUSL-1.1
+
 pragma solidity ^0.8.20;
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {AccessControlDefaultAdminRules} from "@openzeppelin/contracts/access/extensions/AccessControlDefaultAdminRules.sol";
 import {Notarizable} from "./Notarizable.sol";
-import {IBountiesConfig} from "./IBountiesConfig.sol";
-import {ITokenSupportable} from "./ITokenSupportable.sol";
+import {IBountiesConfig} from "./interfaces/IBountiesConfig.sol";
+import {ITokenSupportable} from "./interfaces/ITokenSupportable.sol";
 
 contract BountiesConfig is IBountiesConfig, AccessControlDefaultAdminRules, ITokenSupportable {
   struct CustomFee {
@@ -20,6 +21,7 @@ contract BountiesConfig is IBountiesConfig, AccessControlDefaultAdminRules, ITok
   event ConfigChange(
     address notary,
     address identityContract,
+    address claimValidatorContract,
     uint8 serviceFee,
     uint8 maintainerFee
   );
@@ -40,6 +42,9 @@ contract BountiesConfig is IBountiesConfig, AccessControlDefaultAdminRules, ITok
   // the notary address
   address public notary;
 
+  // the claim validator
+  address public claimValidatorContract;
+
   // the identity contract
   address public identityContract;
 
@@ -59,6 +64,7 @@ contract BountiesConfig is IBountiesConfig, AccessControlDefaultAdminRules, ITok
     address _custodian,
     address _notary,
     address _identityContract,
+    address _claimValidatorContract,
     address[] memory _supportedTokens
   )
     AccessControlDefaultAdminRules(3 days, msg.sender)
@@ -71,6 +77,7 @@ contract BountiesConfig is IBountiesConfig, AccessControlDefaultAdminRules, ITok
 
     notary = _notary;
     identityContract = _identityContract;
+    claimValidatorContract = _claimValidatorContract;
 
     for (uint256 i = 0; i < _supportedTokens.length; i++) {
       isSupportedToken[_supportedTokens[i]] = true;
@@ -83,7 +90,7 @@ contract BountiesConfig is IBountiesConfig, AccessControlDefaultAdminRules, ITok
       );
     }
 
-    emit ConfigChange(notary, identityContract, serviceFee, maintainerFee);
+    emit ConfigChange(notary, identityContract, claimValidatorContract, serviceFee, maintainerFee);
   }
 
   modifier onlyRoles(bytes32 role1, bytes32 role2) {
@@ -104,7 +111,13 @@ contract BountiesConfig is IBountiesConfig, AccessControlDefaultAdminRules, ITok
   }
 
   function emitConfigChange() private {
-    emit ConfigChange(notary, identityContract, serviceFee, maintainerFee);
+    emit ConfigChange(notary, identityContract, claimValidatorContract, serviceFee, maintainerFee);
+  }
+
+  function setClaimValidator(address _newValidator) external onlyRole(CUSTODIAN_ROLE) {
+    _validateAddress(_newValidator);
+    claimValidatorContract = _newValidator;
+    emitConfigChange();
   }
 
   function setNotary(address _newNotary) external onlyRole(CUSTODIAN_ROLE) {

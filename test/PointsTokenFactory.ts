@@ -30,11 +30,15 @@ describe("PointsTokenFactory", () => {
       "http://localhost:3000",
     );
 
+    const ClaimValidatorFactory = await ethers.getContractFactory("StaticClaimValidator");
+    const claimValidator = await ClaimValidatorFactory.deploy(true);
+
     const BountiesConfigFactory = await ethers.getContractFactory("BountiesConfig");
     const bountiesConfig = await BountiesConfigFactory.deploy(
       custodian.address,
       notary.address,
       await identity.getAddress(),
+      await claimValidator.getAddress(),
       []
     );
 
@@ -617,7 +621,6 @@ describe("PointsTokenFactory", () => {
   });
 
   describe("Set Notary", () => {
-    // TODO: add tests for setting notary
     it("should update notary", async () => {
       const { pointsFactory, custodian, issuer } = await pFixture();
 

@@ -31,11 +31,15 @@ describe("Bounties", () => {
     const IdentityFactory = await ethers.getContractFactory("Identity");
     const identity = await IdentityFactory.deploy(custodian.address, notary.address, "http://localhost:3000");
 
+    const ClaimValidatorFactory = await ethers.getContractFactory("StaticClaimValidator");
+    const claimValidator = await ClaimValidatorFactory.deploy(true);
+
     const BountiesConfigFactory = await ethers.getContractFactory("BountiesConfig");
     const bountiesConfig = await BountiesConfigFactory.deploy(
       custodian.address,
       notary.address,
       await identity.getAddress(),
+      await claimValidator.getAddress(),
       [usdcAddr, arbAddr, wethAddr]
     );
 
@@ -96,13 +100,6 @@ describe("Bounties", () => {
     return fixtures;
   }
 
-  // TODO: is this needed?
-  // async function usdcFixture(issuer: HardhatEthersSigner) {
-  //   const TestERC20Factory = await ethers.getContractFactory("TestERC20");
-  //   const usdc = await TestERC20Factory.deploy("USDC", "USDC", 6, 1_000_000, issuer.address);
-  //   return usdc;
-  // }
-
   interface PostBountyProps {
     amount: number;
     platformId: string;
@@ -110,12 +107,12 @@ describe("Bounties", () => {
     issueId: string;
     bounties: Bounties;
     issuer: HardhatEthersSigner;
-    usdc: TestERC20;
+    token: TestERC20;
   }
 
-  async function postBounty({ amount, platformId, repoId, issueId, bounties, issuer, usdc }: PostBountyProps) {
-    await usdc.connect(issuer).approve(await bounties.getAddress(), amount);
-    await bounties.connect(issuer).postBounty(platformId, repoId, issueId, await usdc.getAddress(), amount);
+  async function postBounty({ amount, platformId, repoId, issueId, bounties, issuer, token }: PostBountyProps) {
+    await token.connect(issuer).approve(await bounties.getAddress(), amount);
+    await bounties.connect(issuer).postBounty(platformId, repoId, issueId, await token.getAddress(), amount);
   }
 
   async function maintainerFee(bountiesConfig: BountiesConfig, amount: number) {
@@ -143,6 +140,32 @@ describe("Bounties", () => {
   async function bountyAmountAfterFeesPerContributor(bountiesConfig: BountiesConfig, postedAmount: number, numContributors: number) {
     const amountAfterServiceFee = await bountyAmountAfterFees(bountiesConfig, postedAmount);
     return amountAfterServiceFee / numContributors;
+  }
+
+  async function falseValidatorFixture() {
+    const ClaimValidatorFactory = await ethers.getContractFactory("StaticClaimValidator");
+    return await ClaimValidatorFactory.deploy(false);
+  }
+
+  async function singleClaimValidatorFixture() {
+    const ClaimValidatorFactory = await ethers.getContractFactory("SingleClaimValidator");
+    return await ClaimValidatorFactory.deploy();
+  }
+
+  interface WhitelistEntry {
+    platformId: string;
+    platformUserId: string;
+  }
+
+  async function whitelistClaimValidatorFixture(custodian: HardhatEthersSigner, whitelist: WhitelistEntry[]) {
+    const ClaimValidatorFactory = await ethers.getContractFactory("WhitelistClaimValidator");
+    const claimValidator = await ClaimValidatorFactory.deploy(custodian.address);
+
+    await Promise.all(whitelist.map(({ platformId, platformUserId }) => {
+      claimValidator.connect(custodian).add(platformId, platformUserId);
+    }));
+
+    return claimValidator;
   }
 
   describe("Deployment", () => {
@@ -382,7 +405,7 @@ describe("Bounties", () => {
 
       // post bounty
       const amount = 500;
-      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, usdc });
+      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, token: usdc });
       const contributorAmount = await bountyAmountAfterFeesPerContributor(bountiesConfig, amount, contributorUserIds.length);
 
       // contributors link wallet
@@ -420,7 +443,7 @@ describe("Bounties", () => {
 
       // post bounty
       const amount = 500;
-      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, usdc });
+      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, token: usdc });
       const expectedAmount = await maintainerFee(bountiesConfig, amount);
 
       // when
@@ -479,6 +502,95 @@ describe("Bounties", () => {
       await expect(maintainerClaim.apply(maintainerClaim, [...claimParams, wrongSignature] as any))
         .to.be.revertedWithCustomError(bounties, "InvalidSignature");
     });
+
+    it("should revert when validator returns false for maintainer", async () => {
+      const { bounties, bountiesConfig, custodian, issuer, usdc, platformId, repoId, issueId, executeMaintainerClaim } = await claimableLinkedBountyFixture();
+
+      const claimValidator = await falseValidatorFixture();
+      await bountiesConfig.connect(custodian).setClaimValidator(await claimValidator.getAddress());
+
+      const amount = 500;
+      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, token: usdc });
+
+      await expect(executeMaintainerClaim())
+        .to.be.revertedWithCustomError(bounties, "ClaimValidationError");
+    });
+
+    it("should not revert when validator returns true for maintainer but false for contributors", async () => {
+      const { bounties, bountiesConfig, identity, notary, custodian, issuer, usdc, maintainer, maintainerUserId, platformId, repoId, issueId, contributorUserIds, contributorSigners, executeMaintainerClaim } = await claimableLinkedBountyFixture();
+
+      // set validator which only returns true for maintainer
+      const claimValidator = await whitelistClaimValidatorFixture(custodian, [{ platformId, platformUserId: maintainerUserId }]);
+      await bountiesConfig.connect(custodian).setClaimValidator(await claimValidator.getAddress());
+
+      const amount = 500;
+      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, token: usdc });
+
+      expect(contributorUserIds.length).to.greaterThan(0);
+      for (let i = 0; i < contributorUserIds.length; i++) {
+        const contributorId = contributorUserIds[i];
+
+        const contributor = contributorSigners[i];
+        await linkIdentity({
+          identity,
+          platformId,
+          platformUserId: contributorId,
+          platformUsername: contributorId,
+          participant: contributor,
+          notary
+        });
+      }
+
+      // when
+      await expect(executeMaintainerClaim()).to.not.be.reverted;
+
+      // then - ensure tokens have only been transferred to the maintainer
+      expect(await usdc.balanceOf(maintainer.address)).to.be.greaterThan(0);
+      for (let i = 0; i < contributorUserIds.length; i++) {
+        const contributor = contributorSigners[i];
+        expect(await usdc.balanceOf(contributor.address)).to.be.equal(0);
+      }
+    });
+
+    it("should claim for any link contributors for which validator returns true", async () => {
+      const { bounties, bountiesConfig, identity, notary, custodian, issuer, usdc, maintainer, maintainerUserId, platformId, repoId, issueId, contributorUserIds, contributorSigners, executeMaintainerClaim } = await claimableLinkedBountyFixture();
+
+      // set validator which only returns true for maintainer
+      const claimValidator = await whitelistClaimValidatorFixture(custodian, [
+        { platformId, platformUserId: maintainerUserId },
+        { platformId, platformUserId: contributorUserIds[0] },
+      ]);
+      await bountiesConfig.connect(custodian).setClaimValidator(await claimValidator.getAddress());
+
+      const amount = 500;
+      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, token: usdc });
+
+      expect(contributorUserIds.length).to.greaterThan(0);
+      for (let i = 0; i < contributorUserIds.length; i++) {
+        const contributorId = contributorUserIds[i];
+
+        const contributor = contributorSigners[i];
+        await linkIdentity({
+          identity,
+          platformId,
+          platformUserId: contributorId,
+          platformUsername: contributorId,
+          participant: contributor,
+          notary
+        });
+      }
+
+      // when
+      await expect(executeMaintainerClaim()).to.not.be.reverted;
+
+      // then - ensure tokens have only been transferred to the maintainer
+      expect(await usdc.balanceOf(maintainer.address)).to.be.greaterThan(0);
+      expect(await usdc.balanceOf(contributorSigners[0].address)).to.be.greaterThan(0);
+      for (let i = 1; i < contributorUserIds.length; i++) {
+        const contributor = contributorSigners[i];
+        expect(await usdc.balanceOf(contributor.address)).to.be.equal(0);
+      }
+    });
   });
 
   describe("ContributorClaim", () => {
@@ -488,7 +600,7 @@ describe("Bounties", () => {
 
       // post bounty
       const amount = 500;
-      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, usdc });
+      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, token: usdc });
 
       // maintainer claim
       await executeMaintainerClaim();
@@ -518,7 +630,7 @@ describe("Bounties", () => {
 
       // post bounty
       const amount = 500;
-      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, usdc });
+      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, token: usdc });
 
       // maintainer claim
       await executeMaintainerClaim();
@@ -545,7 +657,7 @@ describe("Bounties", () => {
 
       // post bounty
       const amount = 500;
-      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, usdc });
+      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, token: usdc });
 
       // maintainer claim
       await executeMaintainerClaim();
@@ -574,7 +686,7 @@ describe("Bounties", () => {
 
       // post bounty
       const amount = 500;
-      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, usdc });
+      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, token: usdc });
 
       // maintainer claim
       await executeMaintainerClaim();
@@ -603,7 +715,7 @@ describe("Bounties", () => {
 
       // post bounty
       const amount = 500;
-      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, usdc });
+      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, token: usdc });
 
       // maintainer claim
       await executeMaintainerClaim();
@@ -643,7 +755,7 @@ describe("Bounties", () => {
 
       // post bounty
       const amount = 500;
-      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, usdc });
+      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, token: usdc });
       const contributorAmount = await bountyAmountAfterFeesPerContributor(bountiesConfig, amount, contributorUserIds.length);
 
       // maintainer claim
@@ -678,7 +790,7 @@ describe("Bounties", () => {
 
       // post bounty
       const amount = 500;
-      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, usdc });
+      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, token: usdc });
       const contributorAmount = await bountyAmountAfterFeesPerContributor(bountiesConfig, amount, contributorUserIds.length);
 
       // maintainer claim
@@ -713,7 +825,7 @@ describe("Bounties", () => {
 
       // post bounty
       const amount = 500;
-      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, usdc });
+      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, token: usdc });
       const contributorAmount = await bountyAmountAfterFeesPerContributor(bountiesConfig, amount, contributorUserIds.length);
 
       // maintainer claim
@@ -743,7 +855,7 @@ describe("Bounties", () => {
 
       // post bounty
       const amount = 500;
-      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, usdc });
+      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, token: usdc });
 
       // maintainer claim
       await executeMaintainerClaim();
@@ -770,7 +882,7 @@ describe("Bounties", () => {
 
       // post bounty
       const amount = 500;
-      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, usdc });
+      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, token: usdc });
 
       // maintainer claim
       await executeMaintainerClaim();
@@ -796,13 +908,120 @@ describe("Bounties", () => {
       const expectedAmount = await bountyAmountAfterFees(bountiesConfig, amount);
       expect(await usdc.balanceOf(await contributor.getAddress())).to.be.eq(expectedAmount);
     });
+
+    it("should revert when validator returns false for all tokens", async () => {
+      // given
+      const { executeMaintainerClaim, identity, usdc, custodian, issuer, notary, bounties, bountiesConfig, platformId, repoId, issueId, contributor, contributorUserId } = await claimableLinkedBountyFixture();
+
+      // post bounty
+      const amount = 500;
+      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, token: usdc });
+
+      // maintainer claim
+      await executeMaintainerClaim();
+
+      // update bountiesConfig so validator always returns false
+      const claimValidator = await falseValidatorFixture();
+      await bountiesConfig.connect(custodian).setClaimValidator(await claimValidator.getAddress());
+
+      // contributor link wallet
+      await linkIdentity({
+        identity,
+        platformId,
+        platformUserId: contributorUserId,
+        platformUsername: "coder1",
+        participant: contributor,
+        notary
+      });
+
+      // when/then
+      await expect(bounties.connect(contributor).contributorClaim(platformId, repoId, issueId))
+        .to.be.revertedWithCustomError(bounties, "ClaimValidationError");
+    });
+
+    it("should not revert when validator returns true for at least one token", async () => {
+      // given
+      const { executeMaintainerClaim, identity, arb, usdc, custodian, issuer, notary, bounties, bountiesConfig, platformId, repoId, issueId, contributor, contributorUserId } = await claimableLinkedBountyFixture();
+
+      // post bounty
+      const amount = 500;
+      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, token: usdc });
+      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, token: arb });
+
+      // maintainer claim
+      await executeMaintainerClaim();
+
+      // update bountiesConfig so validator always returns false
+      const claimValidator = await singleClaimValidatorFixture();
+      await bountiesConfig.connect(custodian).setClaimValidator(await claimValidator.getAddress());
+
+      // contributor link wallet
+      await linkIdentity({
+        identity,
+        platformId,
+        platformUserId: contributorUserId,
+        platformUsername: "coder1",
+        participant: contributor,
+        notary
+      });
+
+      // when/then
+      await expect(bounties.connect(contributor).contributorClaim(platformId, repoId, issueId)).to.not.be.reverted;
+      // ensure they got the USDC but not the ARB
+      expect(await usdc.balanceOf(await contributor.getAddress())).to.be.greaterThan(0);
+      expect(await arb.balanceOf(await contributor.getAddress())).to.equal(0);
+    });
+
+    it("should allow user to claim second token when previously rejected by validator", async () => {
+      // given
+      const { executeMaintainerClaim, identity, arb, usdc, custodian, issuer, notary, bounties, bountiesConfig, platformId, repoId, issueId, contributor, contributorUserId } = await claimableLinkedBountyFixture();
+      const staticClaimValidatorAddr = await bountiesConfig.claimValidatorContract();
+
+      // post bounty
+      const amount = 500;
+      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, token: usdc });
+      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, token: arb });
+
+      // maintainer claim
+      await executeMaintainerClaim();
+
+      // update bountiesConfig so validator always returns false
+      const singleClaimValidator = await singleClaimValidatorFixture();
+      await bountiesConfig.connect(custodian).setClaimValidator(await singleClaimValidator.getAddress());
+
+      // contributor link wallet
+      await linkIdentity({
+        identity,
+        platformId,
+        platformUserId: contributorUserId,
+        platformUsername: "coder1",
+        participant: contributor,
+        notary
+      });
+
+      await bounties.connect(contributor).contributorClaim(platformId, repoId, issueId);
+
+      // ensure they got the USDC but not the ARB
+      expect(await usdc.balanceOf(await contributor.getAddress())).to.equal(360)
+      expect(await arb.balanceOf(await contributor.getAddress())).to.equal(0);
+
+      // set the validator back
+      await bountiesConfig.connect(custodian).setClaimValidator(staticClaimValidatorAddr);
+
+      // when
+      await bounties.connect(contributor).contributorClaim(platformId, repoId, issueId);
+
+      // then
+      expect(await usdc.balanceOf(await contributor.getAddress())).to.equal(360);
+      expect(await arb.balanceOf(await contributor.getAddress())).to.equal(360);
+    });
   });
 
   describe("WithdrawFees", () => {
     it('should allow finance team to withdraw', async () => {
       const { bounties, bountiesConfig, platformId, repoId, issueId, issuer, usdc, finance } = await claimableLinkedBountyFixture();
       const amount = 500;
-      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, usdc });
+      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, token: usdc });
 
       // when
       await bounties.connect(finance).withdrawFees(await usdc.getAddress());
@@ -815,7 +1034,7 @@ describe("Bounties", () => {
     it('should zero out fees in contract after withdraw', async () => {
       const { bounties, platformId, repoId, issueId, issuer, usdc, finance } = await claimableLinkedBountyFixture();
       const amount = 500;
-      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, usdc });
+      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, token: usdc });
 
       // when
       await bounties.connect(finance).withdrawFees(await usdc.getAddress());
@@ -827,7 +1046,7 @@ describe("Bounties", () => {
     it('should revert when attempted by non-finance team', async () => {
       const { bounties, platformId, repoId, issueId, issuer, usdc } = await claimableLinkedBountyFixture();
       const amount = 500;
-      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, usdc });
+      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, token: usdc });
 
       // when/then
       await expect(bounties.connect(issuer).withdrawFees(await usdc.getAddress()))
@@ -837,7 +1056,7 @@ describe("Bounties", () => {
     it('should emit Withdraw event', async () => {
       const { bounties, bountiesConfig, platformId, repoId, issueId, issuer, usdc, finance } = await claimableLinkedBountyFixture();
       const amount = 500;
-      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, usdc });
+      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, token: usdc });
       const expectedFee = await serviceFee(bountiesConfig, amount);
 
       // when / then
@@ -1012,7 +1231,6 @@ describe("Bounties", () => {
     it('should not allow non-finance to grant finance role', async () => {
       const { bounties, issuer } = await bountiesFixture();
 
-      // TODO: should finance be able to grant finance role? probably
       // when/then
       await expect(bounties.connect(issuer).grantRole(await bounties.FINANCE_ROLE(), issuer.address))
         .to.be.revertedWithCustomError(bounties, "AccessControlUnauthorizedAccount");

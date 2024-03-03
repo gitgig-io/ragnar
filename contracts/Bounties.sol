@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: BUSL-1.1
+
 pragma solidity ^0.8.20;
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
@@ -8,9 +9,10 @@ import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/Messa
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {AccessControlDefaultAdminRules} from "@openzeppelin/contracts/access/extensions/AccessControlDefaultAdminRules.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
-import {IIdentity, PlatformUser} from "./IIdentity.sol";
-import {ITokenSupportable} from "./ITokenSupportable.sol";
-import {IBountiesConfig} from "./IBountiesConfig.sol";
+import {IIdentity, PlatformUser} from "./interfaces/IIdentity.sol";
+import {ITokenSupportable} from "./interfaces/ITokenSupportable.sol";
+import {IBountiesConfig} from "./interfaces/IBountiesConfig.sol";
+import {IClaimValidator} from "./interfaces/IClaimValidator.sol";
 
 contract Bounties is
   EIP712,
@@ -90,6 +92,7 @@ contract Bounties is
 
   event ConfigChange(address configContract);
 
+  error ClaimValidationError(string platformId, string platformUserId, address token, uint256 amount);
   error AlreadyClaimed(string platformId, string repoId, string issueId, address claimer);
   error IdentityNotFound(string platformId, string platformUserId);
   error InvalidResolver(string platformId, string repoId, string issueId, address claimer);
@@ -386,7 +389,8 @@ contract Bounties is
     bytes calldata _signature
   ) external whenNotPaused issueNotClosed(_platformId, _repoId, _issueId) {
     // lookup maintainer wallet from _maintainerUserId
-    address _maintainerAddress = _getIdentity().ownerOf(_platformId, _maintainerUserId);
+    address _identityContract = _getConfig().identityContract();
+    address _maintainerAddress = IIdentity(_identityContract).ownerOf(_platformId, _maintainerUserId);
 
     // ensure the maintainer address is linked
     if (_maintainerAddress == address(0)) {
@@ -417,20 +421,26 @@ contract Bounties is
     );
 
     // 3. For each token...
-    address[] storage _bountyTokens =
-      bountyTokens[_platformId][_repoId][_issueId];
+    address[] storage _bountyTokens = bountyTokens[_platformId][_repoId][_issueId];
+
+    IClaimValidator _claimValidator = _getClaimValidator();
+
     for (uint256 index = 0; index < _bountyTokens.length; index++) {
       // 3a. compute the bounty claim amount for the maintainer
-      uint256 amount = maintainerClaimAmount(
+      uint256 _amount = maintainerClaimAmount(
         _platformId, _repoId, _issueId, _bountyTokens[index]
       );
 
-      if (amount > 0) {
+      if (!_claimValidator.validate(_identityContract, _platformId, _maintainerUserId, _bountyTokens[index], _amount)) {
+        revert ClaimValidationError(_platformId, _maintainerUserId, _bountyTokens[index], _amount);
+      }
+
+      if (_amount > 0) {
         // 3b. transfer tokens to the maintainer
-        ERC20(_bountyTokens[index]).transfer(_maintainerAddress, amount);
+        ERC20(_bountyTokens[index]).transfer(_maintainerAddress, _amount);
 
         // 3c. remove the amount from the bounty
-        bounties[_platformId][_repoId][_issueId][_bountyTokens[index]] -= amount;
+        bounties[_platformId][_repoId][_issueId][_bountyTokens[index]] -= _amount;
 
         emit BountyClaim(
           _platformId,
@@ -442,14 +452,14 @@ contract Bounties is
           _bountyTokens[index],
           ERC20(_bountyTokens[index]).symbol(),
           ERC20(_bountyTokens[index]).decimals(),
-          amount
+          _amount
         );
       }
     }
 
     // 4. auto-claim for contributors
     for (uint256 i = 0; i < _resolverIds.length; i++) {
-      _contributorClaim(_platformId, _repoId, _issueId, _resolverIds[i]);
+      _contributorClaim(_platformId, _repoId, _issueId, _resolverIds[i], false);
     }
   }
 
@@ -470,18 +480,19 @@ contract Bounties is
     string calldata _issueId
   ) external whenNotPaused unclaimedResolverOnly(_platformId, _repoId, _issueId) {
     IIdentity _identity = _getIdentity();
+
     for (
       uint256 i = 0; i < _identity.balanceOf(msg.sender); i++
     ) {
       // lookup the platformUserId for the resolver
       uint256 _tokenId = _identity.tokenOfOwnerByIndex(msg.sender, i);
-      PlatformUser memory platformUser = _identity.platformUser(_tokenId);
+      PlatformUser memory _platformUser = _identity.platformUser(_tokenId);
 
-      if (!_eq(platformUser.platformId, _platformId)) {
+      if (!_eq(_platformUser.platformId, _platformId)) {
         continue;
       }
 
-      _contributorClaim(_platformId, _repoId, _issueId, platformUser.userId);
+      _contributorClaim(_platformId, _repoId, _issueId, _platformUser.userId, true);
     }
   }
 
@@ -489,19 +500,26 @@ contract Bounties is
     string calldata _platformId,
     string calldata _repoId,
     string calldata _issueId,
-    string memory _resolverUserId
+    string memory _resolverUserId,
+    bool _revertOnNoClaim
   ) private {
     // lookup the wallet for the resolverId
     // if the user hasn't linked yet this will be the zero address which can never claim
-    address _resolver = _getIdentity().ownerOf(_platformId, _resolverUserId);
+    address _identityContract = _getConfig().identityContract();
+    address _resolver = IIdentity(_identityContract).ownerOf(_platformId, _resolverUserId);
 
     if (_resolver == address(0)) {
       // cannot claim since the resolver has not minted yet
       return;
     }
 
-    address[] storage _bountyTokens =
-      bountyTokens[_platformId][_repoId][_issueId];
+    address[] storage _bountyTokens = bountyTokens[_platformId][_repoId][_issueId];
+
+    IClaimValidator _claimValidator = _getClaimValidator();
+
+    // track how many types of tokens were claimed by this contributor 
+    uint16 _numClaimed = 0;
+
     for (uint256 i = 0; i < _bountyTokens.length; i++) {
       address _tokenContract = _bountyTokens[i];
       uint8 _remainingClaims = _claimsRemaining(
@@ -519,17 +537,18 @@ contract Bounties is
 
       uint256 _resolverAmount = _amount / _remainingClaims;
 
-      if (_resolverAmount > 0) {
+      if (
+        _claimValidator.validate(_identityContract, _platformId, _resolverUserId, _tokenContract, _resolverAmount) 
+          && _resolverAmount > 0
+      ) {
         // transfer tokens from this contract to the resolver
         ERC20(_tokenContract).transfer(_resolver, _resolverAmount);
 
         // mark the bounty as claimed for this resolver
-        claimed[_platformId][_repoId][_issueId][_tokenContract][_resolverUserId]
-        = true;
+        claimed[_platformId][_repoId][_issueId][_tokenContract][_resolverUserId] = true;
 
         // reduce the bounty by the amount claimed for this user
-        bounties[_platformId][_repoId][_issueId][_tokenContract] -=
-          _resolverAmount;
+        bounties[_platformId][_repoId][_issueId][_tokenContract] -= _resolverAmount;
 
         emit BountyClaim(
           _platformId,
@@ -543,6 +562,13 @@ contract Bounties is
           ERC20(_tokenContract).decimals(),
           _resolverAmount
         );
+
+        _numClaimed++;
+      }
+
+      if (i == _bountyTokens.length - 1 && _numClaimed == 0 && _revertOnNoClaim) {
+        // this is the last iteration of the loop and no tokens were claimed so revert
+        revert ClaimValidationError(_platformId, _resolverUserId, _tokenContract, _resolverAmount);
       }
     }
   }
@@ -741,5 +767,9 @@ contract Bounties is
 
   function _getIdentity() private view returns (IIdentity) { 
     return IIdentity(_getConfig().identityContract());
+  }
+
+  function _getClaimValidator() private view returns (IClaimValidator) {
+    return IClaimValidator(_getConfig().claimValidatorContract());
   }
 }
