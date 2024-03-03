@@ -147,7 +147,7 @@ describe("Identity", () => {
       expect(await identity.tokenIdForPlatformUser("1", "123")).to.equal(1);
     });
 
-    it("fails to mint identity NFT with invalid signature length", async () => {
+    it("should fail to mint identity NFT with invalid signature length", async () => {
       const { identity, user } = await identityFixture();
       const params = [user.address, "1", "123", "coder1", 1];
       const signature = ethers.toUtf8Bytes("abc123")
@@ -156,7 +156,7 @@ describe("Identity", () => {
         .to.be.revertedWithCustomError(identity, "ECDSAInvalidSignatureLength");
     });
 
-    it("fails to mint identity NFT with signature from wrong account", async () => {
+    it("should fail to mint identity NFT with signature from wrong account", async () => {
       const { identity, owner, user } = await identityFixture();
       const params = [user.address, "1", "123", "coder1", 1];
       const signature = await mintSignature(identity, params, owner);
@@ -165,7 +165,7 @@ describe("Identity", () => {
         .to.be.revertedWithCustomError(identity, "InvalidSignature");
     });
 
-    it("fails to mint a second nft for a user", async () => {
+    it("should fail to mint a second nft for a platform user", async () => {
       // given
       const { identity, notary, user } = await identityFixture();
       const platformId = "1";
@@ -179,12 +179,53 @@ describe("Identity", () => {
         .to.be.revertedWithCustomError(identity, "AlreadyMinted")
         .withArgs(platformId, platformUserId);
     });
+
+    it("should allow minting of multiple nfts for two users on same platform to the same wallet", async () => {
+      // given
+      const { identity, notary, user } = await identityFixture();
+
+      // mint nft for first platform user
+      const params = [user.address, "1", "123", "coder1", 1];
+      const signature = await mintSignature(identity, params, notary);
+      expect(await identity.balanceOf(user.address)).to.equal(0);
+      await applyMint(identity, params, signature);
+      expect(await identity.balanceOf(user.address)).to.equal(1);
+
+      // mint nft for second platform user
+      const params2 = [user.address, "1", "234", "coder2", 1];
+      const signature2 = await mintSignature(identity, params2, notary);
+
+      // when
+      await applyMint(identity, params2, signature2);
+
+      // then
+      expect(await identity.balanceOf(user.address)).to.equal(2);
+    });
+
+    it("should allow minting of multiple nfts for two users with same id on different plaforms to same wallet", async () => {
+      // given
+      const { identity, notary, user } = await identityFixture();
+
+      // mint nft for user on first platform
+      const params = [user.address, "1", "123", "coder1", 1];
+      const signature = await mintSignature(identity, params, notary);
+      expect(await identity.balanceOf(user.address)).to.equal(0);
+      await applyMint(identity, params, signature);
+      expect(await identity.balanceOf(user.address)).to.equal(1);
+
+      // mint nft for user on second platform
+      const params2 = [user.address, "2", "123", "coder1", 1];
+      const signature2 = await mintSignature(identity, params2, notary);
+
+      // when
+      await applyMint(identity, params2, signature2);
+
+      // then
+      expect(await identity.balanceOf(user.address)).to.equal(2);
+    });
   });
 
   describe("Transfer", () => {
-    // TODO: make sure old wallet balance is 0 and new wallet balance is 1 after updating
-    // TODO: what if the target wallet already has an NFT?
-
     it("should be able to transfer identity NFT", async () => {
       const { identity, notary, user2, transferParams: params } = await signAndMintFixture();
       params[0] = user2.address;
@@ -195,6 +236,42 @@ describe("Identity", () => {
 
       // then
       expect(txn.hash).to.be.a.string;
+    });
+
+    it("should update new and old owner balances", async () => {
+      const { identity, notary, user, user2, transferParams: params } = await signAndMintFixture();
+      params[0] = user2.address;
+      const signature = await mintSignature(identity, params, notary);
+      expect(await identity.balanceOf(user.address)).to.equal(1);
+      expect(await identity.balanceOf(user2.address)).to.equal(0);
+
+      // when
+      await applyTransfer(identity, params, signature);
+
+      // then
+      expect(await identity.balanceOf(user.address)).to.equal(0);
+      expect(await identity.balanceOf(user2.address)).to.equal(1);
+    });
+
+    it("should allow transfering to a wallet which already contains an NFT", async () => {
+      const { identity, notary, user, user2, transferParams: params } = await signAndMintFixture();
+      params[0] = user2.address;
+      const signature = await mintSignature(identity, params, notary);
+      expect(await identity.balanceOf(user.address)).to.equal(1);
+      expect(await identity.balanceOf(user2.address)).to.equal(0);
+
+      const mintParams2 = [user2.address, "1", "234", "coder2", 1];
+      const signature2 = await mintSignature(identity, mintParams2, notary);
+      await applyMint(identity, mintParams2, signature2);
+      expect(await identity.balanceOf(user.address)).to.equal(1);
+      expect(await identity.balanceOf(user2.address)).to.equal(1);
+
+      // when
+      await applyTransfer(identity, params, signature);
+
+      // then
+      expect(await identity.balanceOf(user.address)).to.equal(0);
+      expect(await identity.balanceOf(user2.address)).to.equal(2);
     });
 
     it("should update username in platformUserForTokenId", async () => {
@@ -276,7 +353,7 @@ describe("Identity", () => {
         .withArgs(user.address, user2.address, tokenId);
     });
 
-    it("fails to transfer identity NFT with invalid signature", async () => {
+    it("should fail to transfer identity NFT with invalid signature", async () => {
       const { identity, notary, user2, transferParams: params } = await signAndMintFixture();
       // generate sig with old user address
       const signature = await mintSignature(identity, params, notary);
@@ -286,7 +363,7 @@ describe("Identity", () => {
         .to.be.revertedWithCustomError(identity, "InvalidSignature");
     });
 
-    it("fails to transfer identity NFT when not yet minted", async () => {
+    it("should fail to transfer identity NFT when not yet minted", async () => {
       const { identity, notary, user } = await identityFixture();
       const params = [user.address, "1", "123", "coder1", 1];
       const signature = await mintSignature(identity, params, notary);
