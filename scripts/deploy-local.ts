@@ -56,21 +56,36 @@ async function main() {
   const identityAddress = await identity.getAddress();
   console.log(`Identity: ${identityAddress}`);
 
+  const ClaimValidatorFactory = await ethers.getContractFactory("StaticClaimValidator");
+  const claimValidator = await ClaimValidatorFactory.deploy(true);
+  const claimValidatorAddress = await claimValidator.getAddress();
+  console.log(`ClaimValidator: ${claimValidatorAddress}`);
+
+  const BountiesConfigFactory = await ethers.getContractFactory("BountiesConfig");
+  const bountiesConfig = await BountiesConfigFactory.deploy(
+    custodian.address,
+    notary.address,
+    identityAddress,
+    claimValidatorAddress,
+    [usdcAddress, arbAddress, wethAddress]
+  );
+  const bountiesConfigAddress = await bountiesConfig.getAddress();
+  console.log(`BountiesConfig: ${bountiesConfigAddress}`);
+
   const bounties = await ethers.deployContract("Bounties", [
+    bountiesConfigAddress,
     custodian.address,
     finance.address,
-    notary.address,
-    await identity.getAddress(),
-    [usdcAddress, arbAddress, wethAddress],
   ]);
+
   const bountiesAddr = await bounties.getAddress();
   console.log(`Bounties: ${bountiesAddr}`);
 
-  const tokenRegistry = await ethers.deployContract("OrgTokenRegistry", [
+  const tokenRegistry = await ethers.deployContract("PointsTokenRegistry", [
     custodian.address,
   ]);
   const tokenRegistryAddr = await tokenRegistry.getAddress();
-  console.log(`Org Token Registry: ${tokenRegistryAddr}`);
+  console.log(`Points Token Registry: ${tokenRegistryAddr}`);
 
   const pointsTokenFactory = await ethers.deployContract("PointsTokenFactory", [
     custodian.address,
@@ -84,12 +99,12 @@ async function main() {
   const pointsTokenFactoryAddr = await pointsTokenFactory.getAddress();
   console.log(`Points Token Factory: ${pointsTokenFactoryAddr}`);
 
-  await pointsTokenFactory.connect(custodian).addBountiesContract(bounties);
+  await pointsTokenFactory.connect(custodian).addBountiesConfigContract(bountiesConfig);
 
   // allow the token factory to add supported tokens to the bounties contract
-  await bounties
+  await bountiesConfig
     .connect(custodian)
-    .grantRole(await bounties.TRUSTED_CONTRACT_ROLE(), pointsTokenFactory);
+    .grantRole(await bountiesConfig.TRUSTED_CONTRACT_ROLE(), pointsTokenFactory);
 
   // alow the pointsTokenFactory to register tokens in the registry
   tokenRegistry
@@ -100,7 +115,7 @@ async function main() {
     );
 
   // set a custom fee for the issuer
-  await bounties.connect(custodian).setCustomServiceFee(issuer.address, 10);
+  await bountiesConfig.connect(custodian).setCustomServiceFee(issuer.address, 10);
 
   // write out addresses to a file
   const addresses = {
