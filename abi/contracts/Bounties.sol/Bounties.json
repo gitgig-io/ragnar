@@ -95,6 +95,32 @@
     "type": "error"
   },
   {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "platformId",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "platformUserId",
+        "type": "string"
+      },
+      {
+        "internalType": "address",
+        "name": "token",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "ClaimValidationError",
+    "type": "error"
+  },
+  {
     "inputs": [],
     "name": "ECDSAInvalidSignature",
     "type": "error"

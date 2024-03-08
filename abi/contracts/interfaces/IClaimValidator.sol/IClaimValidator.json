@@ -1,0 +1,41 @@
+[
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "identityContract",
+        "type": "address"
+      },
+      {
+        "internalType": "string",
+        "name": "platformId",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "platformUserId",
+        "type": "string"
+      },
+      {
+        "internalType": "address",
+        "name": "tokenContract",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "validate",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+]

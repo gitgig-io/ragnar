@@ -17,6 +17,11 @@
         "type": "address"
       },
       {
+        "internalType": "address",
+        "name": "_claimValidatorContract",
+        "type": "address"
+      },
+      {
         "internalType": "address[]",
         "name": "_supportedTokens",
         "type": "address[]"
@@ -140,6 +145,12 @@
         "indexed": false,
         "internalType": "address",
         "name": "identityContract",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "claimValidatorContract",
         "type": "address"
       },
       {
@@ -464,6 +475,19 @@
     "type": "function"
   },
   {
+    "inputs": [],
+    "name": "claimValidatorContract",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "inputs": [
       {
         "internalType": "address",
@@ -780,6 +804,19 @@
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_newValidator",
+        "type": "address"
+      }
+    ],
+    "name": "setClaimValidator",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
