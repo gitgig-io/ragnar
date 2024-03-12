@@ -138,7 +138,7 @@ contract PointsTokenFactory is
     }
 
     function _validateSymbol(string calldata _symbol) private pure {
-        if (!_eq(_substr(_symbol, 0, 1), "p")) {
+        if (!_eq(_substr(_symbol, 0, 2), "cp")) {
             revert InvalidSymbol(_symbol);
         }
     }

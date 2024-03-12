@@ -151,7 +151,7 @@ describe("PointsTokenFactory", () => {
     };
   }
 
-  const BASE_PARAMS = ["Test Points", "pTST", "1", "GitGig"] as const;
+  const BASE_PARAMS = ["Test Points", "cpTST", "1", "GitGig"] as const;
 
   async function pointsTokenParamsFixture(
     pointsFactory: PointsTokenFactory,
@@ -231,14 +231,14 @@ describe("PointsTokenFactory", () => {
 
     it("should register token as a supported token on bounties contract", async () => {
       const { bountiesConfig, pointsFactory, issuer, notary, registry } = await pFixture();
-      let tokenAddr = await registry.getContract("1", "GitGig", "pTST");
+      let tokenAddr = await registry.getContract("1", "GitGig", "cpTST");
       expect(tokenAddr).to.equal(ethers.ZeroAddress);
 
       // when
       await createPointsToken(pointsFactory, issuer, notary);
 
       // then
-      tokenAddr = await registry.getContract("1", "GitGig", "pTST");
+      tokenAddr = await registry.getContract("1", "GitGig", "cpTST");
       expect(tokenAddr).to.not.equal(ethers.ZeroAddress);
       expect(await bountiesConfig.isSupportedToken(tokenAddr)).to.be.true;
     });
@@ -250,7 +250,7 @@ describe("PointsTokenFactory", () => {
         .withArgs(
           anyValue,
           "Test Points",
-          "pTST",
+          "cpTST",
           DECIMALS,
           TOTAL_SUPPLY,
           issuer.address,
@@ -277,7 +277,7 @@ describe("PointsTokenFactory", () => {
 
     it("should revert with invalid signature", async () => {
       const { pointsFactory, issuer } = await pFixture();
-      const params = ["Test Points", "pTST", "1", "GitGig"];
+      const params = ["Test Points", "cpTST", "1", "GitGig"];
       const sigParams = [...params, issuer.address];
       const wrongSignature = await createPointsTokenSignature(
         pointsFactory,
