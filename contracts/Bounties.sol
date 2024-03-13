@@ -431,7 +431,7 @@ contract Bounties is
         _platformId, _repoId, _issueId, _bountyTokens[index]
       );
 
-      if (!_claimValidator.validate(_identityContract, _platformId, _maintainerUserId, _bountyTokens[index], _amount)) {
+      if (!_claimValidator.validate(_identityContract, _platformId, _repoId, _issueId, _maintainerUserId, _bountyTokens[index], _amount)) {
         revert ClaimValidationError(_platformId, _maintainerUserId, _bountyTokens[index], _amount);
       }
 
@@ -538,7 +538,7 @@ contract Bounties is
       uint256 _resolverAmount = _amount / _remainingClaims;
 
       if (
-        _claimValidator.validate(_identityContract, _platformId, _resolverUserId, _tokenContract, _resolverAmount) 
+        _claimValidator.validate(_identityContract, _platformId, _repoId, _issueId, _resolverUserId, _tokenContract, _resolverAmount) 
           && _resolverAmount > 0
       ) {
         // transfer tokens from this contract to the resolver

@@ -11,7 +11,7 @@ contract StaticClaimValidator is IClaimValidator {
     result = _result;
   }
 
-  function validate(address, string calldata, string calldata, address, uint256) override(IClaimValidator) external view returns (bool) {
+  function validate(address, string calldata, string calldata, string calldata, string calldata, address, uint256) override(IClaimValidator) external view returns (bool) {
     return result;
   }
 }

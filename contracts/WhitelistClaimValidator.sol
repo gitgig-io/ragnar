@@ -28,7 +28,7 @@ contract WhitelistClaimValidator is IClaimValidator, AccessControlDefaultAdminRu
     delete whitelisted[_platformId][_platformUserId];
   }
 
-  function validate(address, string calldata _platformId, string calldata _platformUserId, address, uint256) override(IClaimValidator) external view returns (bool) {
+  function validate(address, string calldata _platformId, string calldata, string calldata, string calldata _platformUserId, address, uint256) override(IClaimValidator) external view returns (bool) {
     if (whitelisted[_platformId][_platformUserId]) {
       return true;
     }

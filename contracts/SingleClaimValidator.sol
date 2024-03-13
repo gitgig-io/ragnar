@@ -11,7 +11,7 @@ contract SingleClaimValidator is IClaimValidator {
   constructor() {
   }
 
-  function validate(address, string calldata _platformId, string calldata _platformUserId, address, uint256) override(IClaimValidator) external returns (bool) {
+  function validate(address, string calldata _platformId, string calldata, string calldata, string calldata _platformUserId, address, uint256) override(IClaimValidator) external returns (bool) {
     if (claimed[_platformId][_platformUserId]) {
       return false;
     }
