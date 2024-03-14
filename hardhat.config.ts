@@ -22,7 +22,8 @@ const config: HardhatUserConfig = {
     currency: "USD",
     coinmarketcap: COINMARKETCAP_API_KEY,
     gasPriceApi: "https://api.arbiscan.io/api?module=proxy&action=eth_gasPrice",
-    enabled: false
+    gasPrice: 0.2,
+    enabled: (process.env.REPORT_GAS) ? true : false
   },
   solidity: {
     version: "0.8.20",

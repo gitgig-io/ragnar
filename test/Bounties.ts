@@ -1679,4 +1679,122 @@ describe("Bounties", () => {
         );
     });
   });
+
+  describe('Scaling', () => {
+    it('should handle a bounty with 25 tokens without autoclaim', async () => {
+      const { bounties, bountiesConfig, custodian, identity, issuer, maintainer, notary, contributor, contributor2, contributor3 } = await bountiesFixture();
+      const TestERC20Factory = await ethers.getContractFactory("TestERC20");
+
+      const platformId = "1";
+      const maintainerUserId = "maintainer1";
+      const contributors = [
+        { signer: contributor, userId: "contributor1" },
+        { signer: contributor2, userId: "contributor2" },
+        { signer: contributor3, userId: "contributor3" }
+      ]
+      const contributorUserIds = contributors.map(c => c.userId);
+      const repoId = "gitgig-io/ragnar";
+      const issueId = "123";
+
+      const amount = 500;
+
+      let tokens = [];
+      for (let i = 0; i < 100; i++) {
+        const token = await TestERC20Factory.deploy("TKN", "Token", 0, 1_000_000_000_000, issuer.address);
+        const tokenAddr = await token.getAddress();
+
+        // add token support
+        await bountiesConfig.connect(custodian).addToken(tokenAddr);
+
+        // post bounty
+        await token.connect(issuer).approve(await bounties.getAddress(), amount);
+        await bounties.connect(issuer).postBounty(platformId, repoId, issueId, tokenAddr, amount);
+        tokens.push(token);
+      }
+
+      // maintainer link
+      await linkIdentity({ identity, platformId, platformUserId: maintainerUserId, platformUsername: "coder1", participant: maintainer, notary });
+
+      // maintainer claim
+      const claimParams = [maintainerUserId, platformId, repoId, issueId, contributorUserIds];
+      const claimSignature = await maintainerClaimSignature(bounties, claimParams, notary);
+      const { maintainerClaim } = bounties.connect(maintainer);
+      const executeMaintainerClaim = async () => await maintainerClaim.apply(maintainerClaim, [...claimParams, claimSignature] as any);
+      await executeMaintainerClaim();
+
+      for (let i = 0; i < contributors.length; i++) {
+        const contributor = contributors[i];
+        await linkIdentity({ identity, platformId, platformUserId: contributor.userId, platformUsername: contributor.userId, participant: contributor.signer, notary });
+        await bounties.connect(contributor.signer).contributorClaim(platformId, repoId, issueId);
+      }
+
+      for (let i = 0; i < tokens.length; i++) {
+        const token = tokens[i];
+        expect(await token.balanceOf(maintainer.address)).to.be.greaterThan(0);
+
+        for (let j = 0; j < contributors.length; j++) {
+          const contributor = contributors[j];
+          expect(await token.balanceOf(contributor.signer.address)).to.be.greaterThan(0);
+        }
+      }
+    });
+
+    it('should handle a bounty with 25 tokens with autoclaim', async () => {
+      const { bounties, bountiesConfig, custodian, identity, issuer, maintainer, notary, contributor, contributor2, contributor3 } = await bountiesFixture();
+      const TestERC20Factory = await ethers.getContractFactory("TestERC20");
+
+      const platformId = "1";
+      const maintainerUserId = "maintainer1";
+      const contributors = [
+        { signer: contributor, userId: "contributor1" },
+        { signer: contributor2, userId: "contributor2" },
+        { signer: contributor3, userId: "contributor3" }
+      ]
+      const contributorUserIds = contributors.map(c => c.userId);
+      const repoId = "gitgig-io/ragnar";
+      const issueId = "123";
+
+      const amount = 500;
+
+      let tokens = [];
+      for (let i = 0; i < 25; i++) {
+        const token = await TestERC20Factory.deploy("TKN", "Token", 0, 1_000_000_000_000, issuer.address);
+        const tokenAddr = await token.getAddress();
+
+        // add token support
+        await bountiesConfig.connect(custodian).addToken(tokenAddr);
+
+        // post bounty
+        await token.connect(issuer).approve(await bounties.getAddress(), amount);
+        await bounties.connect(issuer).postBounty(platformId, repoId, issueId, tokenAddr, amount);
+        tokens.push(token);
+      }
+
+      // maintainer link
+      await linkIdentity({ identity, platformId, platformUserId: maintainerUserId, platformUsername: "coder1", participant: maintainer, notary });
+
+      // contributor link
+      for (let i = 0; i < contributors.length; i++) {
+        const contributor = contributors[i];
+        await linkIdentity({ identity, platformId, platformUserId: contributor.userId, platformUsername: contributor.userId, participant: contributor.signer, notary });
+      }
+
+      // maintainer claim
+      const claimParams = [maintainerUserId, platformId, repoId, issueId, contributorUserIds];
+      const claimSignature = await maintainerClaimSignature(bounties, claimParams, notary);
+      const { maintainerClaim } = bounties.connect(maintainer);
+      const executeMaintainerClaim = async () => await maintainerClaim.apply(maintainerClaim, [...claimParams, claimSignature] as any);
+      await executeMaintainerClaim();
+
+      for (let i = 0; i < tokens.length; i++) {
+        const token = tokens[i];
+        expect(await token.balanceOf(maintainer.address)).to.be.greaterThan(0);
+
+        for (let j = 0; j < contributors.length; j++) {
+          const contributor = contributors[j];
+          expect(await token.balanceOf(contributor.signer.address)).to.be.greaterThan(0);
+        }
+      }
+    });
+  });
 });
