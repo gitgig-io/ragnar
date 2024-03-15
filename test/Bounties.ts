@@ -364,6 +364,39 @@ describe("Bounties", () => {
       // then
       expect(await bounties.reclaimableAt(platform, repo, issue)).to.be.equal(reclaimableAt);
     });
+
+    it("should revert when adding 26th token", async () => {
+      const { bounties, bountiesConfig, custodian, issuer } = await bountiesFixture();
+      const TestERC20Factory = await ethers.getContractFactory("TestERC20");
+
+      const platformId = "1";
+      const repoId = "gitgig-io/ragnar";
+      const issueId = "123";
+
+      const amount = 500;
+
+      const createTokenAndPostBounty = async () => {
+        const token = await TestERC20Factory.deploy("TKN", "Token", 0, 1_000_000_000_000, issuer.address);
+        const tokenAddr = await token.getAddress();
+
+        // add token support
+        await bountiesConfig.connect(custodian).addToken(tokenAddr);
+
+        // post bounty
+        await token.connect(issuer).approve(await bounties.getAddress(), amount);
+        await bounties.connect(issuer).postBounty(platformId, repoId, issueId, tokenAddr, amount);
+
+        return token;
+      };
+
+      let tokens = [];
+      for (let i = 0; i < 24; i++) {
+        const token = createTokenAndPostBounty();
+        tokens.push(token);
+      }
+
+      expect(createTokenAndPostBounty()).to.be.revertedWithCustomError(bounties, 'MaxTokensError');
+    });
   });
 
   describe("MaintainerClaim", () => {
@@ -1699,7 +1732,7 @@ describe("Bounties", () => {
       const amount = 500;
 
       let tokens = [];
-      for (let i = 0; i < 100; i++) {
+      for (let i = 0; i < 25; i++) {
         const token = await TestERC20Factory.deploy("TKN", "Token", 0, 1_000_000_000_000, issuer.address);
         const tokenAddr = await token.getAddress();
 

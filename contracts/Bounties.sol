@@ -100,6 +100,7 @@ contract Bounties is
   error IssueClosed(string platformId, string repoId, string issueId);
   error NoAmount(address token);
   error NoBounty(string platformId, string repoId, string issueId, address[] tokens);
+  error MaxTokensError();
   error TimeframeError(uint256 eligibleAt);
   error TokenSupportError(address token, bool supported);
 
@@ -226,6 +227,10 @@ contract Bounties is
     issueNotClosed(_platform, _repoId, _issueId)
     supportedToken(_tokenContract)
   {
+    if (bountyTokens[_platform][_repoId][_issueId].length >= 25 && bounties[_platform][_repoId][_issueId][_tokenContract] == 0) {
+      revert MaxTokensError();
+    }
+
     uint256 _fee = (_amount * _getConfig().effectiveServiceFee(msg.sender)) / 100;
     uint256 _bountyAmount = _amount - _fee;
 
@@ -260,7 +265,6 @@ contract Bounties is
       _fee,
       _reclaimableAt
     );
-    // TOOD: what if the issue was already closed be we aren't tracking it??? FE could check...
   }
 
   function _addTokenToBountyTokens(
