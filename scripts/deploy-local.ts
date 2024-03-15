@@ -26,27 +26,15 @@ async function main() {
   const usdcAddress = await usdc.getAddress();
   console.log(`Test USDC: ${usdcAddress}`);
 
-  const bigSupply = ethers.toBigInt("1000000000000000000000000000");
-
-  const arb = await ethers.deployContract("TestERC20", [
-    "TestARB",
-    "ARB",
-    18,
-    bigSupply,
+  const dai = await ethers.deployContract("TestERC20", [
+    "TestDAI",
+    "DAI",
+    6,
+    1_000_000_000_000,
     issuer.address,
   ]);
-  const arbAddress = await arb.getAddress();
-  console.log(`Test ARB: ${arbAddress}`);
-
-  const weth = await ethers.deployContract("TestERC20", [
-    "TestWETH",
-    "WETH",
-    18,
-    bigSupply,
-    issuer.address,
-  ]);
-  const wethAddress = await weth.getAddress();
-  console.log(`Test WETH: ${wethAddress}`);
+  const daiAddress = await dai.getAddress();
+  console.log(`Test DAI: ${daiAddress}`);
 
   const identity = await ethers.deployContract("Identity", [
     custodian.address,
@@ -67,7 +55,7 @@ async function main() {
     notary.address,
     identityAddress,
     claimValidatorAddress,
-    [usdcAddress, arbAddress, wethAddress]
+    [usdcAddress, daiAddress]
   );
   const bountiesConfigAddress = await bountiesConfig.getAddress();
   console.log(`BountiesConfig: ${bountiesConfigAddress}`);
@@ -126,9 +114,8 @@ async function main() {
     orgTokenRegistry: tokenRegistryAddr,
 
     // tokens
+    dai: daiAddress,
     usdc: usdcAddress,
-    arb: arbAddress,
-    weth: wethAddress,
   };
 
   fs.writeFileSync("addresses.json", JSON.stringify(addresses));
