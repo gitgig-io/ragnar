@@ -18,7 +18,12 @@
       },
       {
         "internalType": "address",
-        "name": "_registry",
+        "name": "_bountiesRegistry",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "_tokenRegistry",
         "type": "address"
       },
       {
@@ -230,7 +235,13 @@
       {
         "indexed": false,
         "internalType": "address",
-        "name": "registry",
+        "name": "bountiesRegistry",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "tokenRegistry",
         "type": "address"
       },
       {
@@ -593,6 +604,19 @@
   },
   {
     "inputs": [],
+    "name": "bountiesRegistry",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "cancelDefaultAdminTransfer",
     "outputs": [],
     "stateMutability": "nonpayable",
@@ -896,19 +920,6 @@
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "registry",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
     "inputs": [
       {
         "internalType": "address",
@@ -967,6 +978,19 @@
   {
     "inputs": [
       {
+        "internalType": "address",
+        "name": "_bountiesRegistry",
+        "type": "address"
+      }
+    ],
+    "name": "setBountiesRegistry",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "uint8",
         "name": "_decimals",
         "type": "uint8"
@@ -1007,11 +1031,11 @@
     "inputs": [
       {
         "internalType": "address",
-        "name": "_registry",
+        "name": "_tokenRegistry",
         "type": "address"
       }
     ],
-    "name": "setRegistry",
+    "name": "setTokenRegistry",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -1043,6 +1067,19 @@
         "internalType": "bool",
         "name": "",
         "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "tokenRegistry",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
       }
     ],
     "stateMutability": "view",

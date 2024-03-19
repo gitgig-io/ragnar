@@ -21,7 +21,8 @@ contract PointsTokenFactory is
     uint8 public dec;
     uint256 public totalSupply;
     address[] public bountiesConfigContracts;
-    address public registry;
+    address public tokenRegistry;
+    address public bountiesRegistry;
 
     bytes32 public constant CUSTODIAN_ADMIN_ROLE = keccak256("CUSTODIAN_ADMIN_ROLE");
     bytes32 public constant CUSTODIAN_ROLE = keccak256("CUSTODIAN_ROLE");
@@ -54,7 +55,8 @@ contract PointsTokenFactory is
         uint8 decimals,
         uint256 totalSupply,
         address[] bountiesConfigContracts,
-        address registry,
+        address bountiesRegistry,
+        address tokenRegistry,
         address notary
     );
 
@@ -64,7 +66,8 @@ contract PointsTokenFactory is
         address _custodian,
         address _finance,
         address _notary,
-        address _registry,
+        address _bountiesRegistry,
+        address _tokenRegistry,
         uint8 _decimals,
         uint256 _totalSupply,
         uint256 _fee
@@ -80,7 +83,8 @@ contract PointsTokenFactory is
         _grantRole(FINANCE_ROLE, _finance);
         _setRoleAdmin(CUSTODIAN_ROLE, CUSTODIAN_ADMIN_ROLE);
         _setRoleAdmin(FINANCE_ROLE, FINANCE_ADMIN_ROLE);
-        registry = _registry;
+        bountiesRegistry = _bountiesRegistry;
+        tokenRegistry = _tokenRegistry;
         dec = _decimals;
         totalSupply = _totalSupply;
         fee = _fee;
@@ -101,6 +105,7 @@ contract PointsTokenFactory is
 
         address _pToken = address(
             new PointsToken(
+                bountiesRegistry,
                 _name,
                 _symbol,
                 _platformId,
@@ -117,7 +122,7 @@ contract PointsTokenFactory is
 
         // add symbol to registry
         // this will fail if the symbol already exists in the owner
-        IPointsTokenRegistry(registry).add(_platformId, _owner, _symbol, _pToken);
+        IPointsTokenRegistry(tokenRegistry).add(_platformId, _owner, _symbol, _pToken);
 
         emit PointsTokenCreate(
             _pToken,
@@ -210,8 +215,13 @@ contract PointsTokenFactory is
         _emitConfigChange();
     }
 
-    function setRegistry(address _registry) external onlyRole(CUSTODIAN_ROLE) {
-        registry = _registry;
+    function setBountiesRegistry(address _bountiesRegistry) external onlyRole(CUSTODIAN_ROLE) {
+        bountiesRegistry = _bountiesRegistry;
+        _emitConfigChange();
+    }
+
+    function setTokenRegistry(address _tokenRegistry) external onlyRole(CUSTODIAN_ROLE) {
+        tokenRegistry = _tokenRegistry;
         _emitConfigChange();
     }
 
@@ -278,7 +288,8 @@ contract PointsTokenFactory is
             dec,
             totalSupply,
             bountiesConfigContracts,
-            registry,
+            bountiesRegistry,
+            tokenRegistry,
             notary
         );
     }

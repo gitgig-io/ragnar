@@ -115,7 +115,7 @@ contract Bounties is
   );
 
   // how long before bounties are reclaimable for an issue (from first bounty posted on the issue)
-  uint64 public constant RECLAIM_START = 365 days;
+  uint64 public constant RECLAIM_START = 14 days;
 
   // number of days
   uint64 public constant RECLAIM_DAYS = 90 days;
