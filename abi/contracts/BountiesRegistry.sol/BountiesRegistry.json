@@ -59,6 +59,16 @@
     "type": "error"
   },
   {
+    "inputs": [],
+    "name": "BountiesContractAlreadyRegistered",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "BountiesContractNotRegistered",
+    "type": "error"
+  },
+  {
     "inputs": [
       {
         "internalType": "uint8",
@@ -73,6 +83,32 @@
     ],
     "name": "SafeCastOverflowedUintDowncast",
     "type": "error"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "contractAddress",
+        "type": "address"
+      }
+    ],
+    "name": "BountiesContractRegistered",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "contractAddress",
+        "type": "address"
+      }
+    ],
+    "name": "BountiesContractUnregistered",
+    "type": "event"
   },
   {
     "anonymous": false,
@@ -249,7 +285,7 @@
     "inputs": [
       {
         "internalType": "address",
-        "name": "addr",
+        "name": "_addr",
         "type": "address"
       }
     ],
@@ -395,7 +431,7 @@
     "inputs": [
       {
         "internalType": "address",
-        "name": "addr",
+        "name": "_addr",
         "type": "address"
       }
     ],
@@ -463,7 +499,7 @@
     "inputs": [
       {
         "internalType": "address",
-        "name": "addr",
+        "name": "_addr",
         "type": "address"
       }
     ],
