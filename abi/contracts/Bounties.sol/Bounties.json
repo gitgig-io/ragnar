@@ -231,6 +231,11 @@
     "type": "error"
   },
   {
+    "inputs": [],
+    "name": "MaxTokensError",
+    "type": "error"
+  },
+  {
     "inputs": [
       {
         "internalType": "address",

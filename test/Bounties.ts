@@ -336,10 +336,10 @@ describe("Bounties", () => {
 
       // then
       const now = Math.floor((new Date()).getTime() / 1000);
-      const beforeOneYear = now + (60 * 60 * 24 * 364);
-      const afterOneYear = now + (60 * 60 * 24 * 366);
-      expect(await bounties.reclaimableAt(platform, repo, issue)).to.be.greaterThan(beforeOneYear);
-      expect(await bounties.reclaimableAt(platform, repo, issue)).to.be.lessThan(afterOneYear);
+      const beforeReclaimable = now + (60 * 60 * 24 * 13);
+      const afterReclaimable = now + (60 * 60 * 24 * 15);
+      expect(await bounties.reclaimableAt(platform, repo, issue)).to.be.greaterThan(beforeReclaimable);
+      expect(await bounties.reclaimableAt(platform, repo, issue)).to.be.lessThan(afterReclaimable);
     });
 
     it("should not update reclaimableAt on second bounty posted on issue", async () => {
@@ -1381,8 +1381,8 @@ describe("Bounties", () => {
       return { ...fixtures, amount, serviceFee, bountyAmount, platformId, repoId, issueId, supportedTokens };
     }
 
-    const RECLAIM_TIMEFRAME = 60 * 60 * 24 * (365 + 1);
-    const SWEEP_TIMEFRAME = 60 * 60 * 24 * (365 + 90);
+    const RECLAIM_TIMEFRAME = 60 * 60 * 24 * (14 + 1);
+    const SWEEP_TIMEFRAME = 60 * 60 * 24 * (14 + 90);
 
     async function sweepableBountyAfterReclaimFixture() {
       const fixtures = await sweepableBountyFixture();
@@ -1516,7 +1516,7 @@ describe("Bounties", () => {
       return { ...fixtures, amount, serviceFee, bountyAmount, platformId, repoId, issueId, issuedToken };
     }
 
-    const RECLAIM_TIMEFRAME = 60 * 60 * 24 * (365 + 1);
+    const RECLAIM_TIMEFRAME = 60 * 60 * 24 * (14 + 1);
 
     async function reclaimableBountyAfterReclaimAvailableFixture() {
       const fixtures = await reclaimableBountyFixture();
