@@ -367,6 +367,11 @@ contract Bounties is
     bounties[_platformId][_repoId][_issueId][_tokenContract] -= _amount;
     _maybeRemoveBountyToken(_platformId, _repoId, _issueId, _tokenContract);
 
+    if (bountyTokens[_platformId][_repoId][_issueId].length == 0) {
+      // fully reclaimed so reset reclaimableAt
+      reclaimableAt[_platformId][_repoId][_issueId] = 0;
+    }
+
     emit BountyReclaim(
       _platformId,
       _repoId,

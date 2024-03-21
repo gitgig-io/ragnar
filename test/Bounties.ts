@@ -1694,6 +1694,20 @@ describe("Bounties", () => {
       await expect(bounties.bountyTokens(platformId, repoId, issueId, 0)).to.be.reverted;
     });
 
+    it('should reset reclaimableAt when bounty has been fully reclaimed', async () => {
+      const { bounties, issuer, platformId, repoId, issueId, issuedToken } = await reclaimableBountyAfterReclaimAvailableFixture();
+      expect(await bounties.reclaimableAt(platformId, repoId, issueId)).to.not.equal(0);
+
+      // when
+      await bounties
+        .connect(issuer)
+        .reclaim(platformId, repoId, issueId, issuedToken);
+
+      // then
+      expect(await bounties.reclaimableAt(platformId, repoId, issueId)).to.equal(0);
+    });
+
+
     it('should emit Reclaim event', async () => {
       const { bounties, issuer, usdc, bountyAmount, platformId, repoId, issueId, issuedToken } = await reclaimableBountyAfterReclaimAvailableFixture();
 
