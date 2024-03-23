@@ -10,6 +10,8 @@ contract PointsTokenRegistry is IPointsTokenRegistry, AccessControlDefaultAdminR
     mapping(string => mapping(string => mapping(string => address)))
         private symbols;
 
+    mapping(address => bool) public isPointsToken;
+
     error SymbolAlreadyExists(
         string platformId,
         string owner,
@@ -43,6 +45,7 @@ contract PointsTokenRegistry is IPointsTokenRegistry, AccessControlDefaultAdminR
             revert SymbolAlreadyExists(_platformId, _owner, _symbol, _existing);
         }
 
+        isPointsToken[_token] = true;
         symbols[_platformId][_owner][_symbol] = _token;
 
         emit SymbolRegistered(_platformId, _owner, _symbol, _token);

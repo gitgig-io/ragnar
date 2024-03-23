@@ -1,5 +1,5 @@
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { Bounties, PointsTokenFactory, Identity } from "../../typechain-types";
+import { Bounties, PointsTokenFactory, Identity, OrgKycClaimValidator } from "../../typechain-types";
 import { TypedDataDomain, TypedDataField } from "ethers";
 
 export async function mintSignature(identity: Identity, params: any[], signer: HardhatEthersSigner) {
@@ -97,6 +97,36 @@ export async function createPointsTokenSignature(cpFactory: PointsTokenFactory, 
     platform: params[2] as string,
     owner: params[3] as string,
     creator: params[4] as string,
+  };
+
+  const signature = await signer.signTypedData(domain, types, values);
+  return signature;
+}
+
+export async function setKnownStatusSignature(validator: OrgKycClaimValidator, params: any[], signer: HardhatEthersSigner) {
+  const domain: TypedDataDomain = {
+    name: "GitGigOrgKycClaimValidator",
+    version: "1",
+    chainId: 1337,
+    verifyingContract: await validator.getAddress(),
+  };
+
+  const types: Record<string, TypedDataField[]> = {
+    SetKnownStatus: [
+      { name: "platformId", type: "string" },
+      { name: "orgName", type: "string" },
+      { name: "platformUserId", type: "string" },
+      { name: "isKnown", type: "bool" },
+      { name: "expires", type: "uint256" },
+    ]
+  };
+
+  const values: Record<string, any> = {
+    platformId: params[0] as string,
+    orgName: params[1] as string,
+    platformUserId: params[2] as string,
+    isKnown: params[3] as boolean,
+    expires: params[4] as number,
   };
 
   const signature = await signer.signTypedData(domain, types, values);

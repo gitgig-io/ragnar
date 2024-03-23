@@ -12,7 +12,7 @@
     "maintainerclaim:local": "hardhat run --network localhost test/integ/MaintainerClaim.ts",
     "postbounty:local": "hardhat run --network localhost test/integ/PostBounty.ts",
     "postbounty:arb-sepolia": "hardhat run --network sepolia test/integ/PostBounty-Arb-Sepolia.ts",
-    "test": "hardhat test test/*.ts"
+    "test": "hardhat test test/validators/*.ts test/*.ts"
   },
   "keywords": [],
   "author": "",

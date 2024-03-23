@@ -36,6 +36,8 @@ async function main() {
   const daiAddress = await dai.getAddress();
   console.log(`Test DAI: ${daiAddress}`);
 
+  const stablecoinAddrs = [usdcAddress, daiAddress];
+
   const identity = await ethers.deployContract("Identity", [
     custodian.address,
     notary.address,
@@ -44,10 +46,28 @@ async function main() {
   const identityAddress = await identity.getAddress();
   console.log(`Identity: ${identityAddress}`);
 
-  const ClaimValidatorFactory = await ethers.getContractFactory("StaticClaimValidator");
-  const claimValidator = await ClaimValidatorFactory.deploy(true);
+  const bountiesRegistry = await ethers.deployContract("BountiesRegistry", [custodian.address]);
+  const bountiesRegistryAddr = await bountiesRegistry.getAddress();
+  console.log(`Bounties Registry: ${bountiesRegistryAddr}`);
+
+  const tokenRegistry = await ethers.deployContract("PointsTokenRegistry", [custodian.address]);
+  const tokenRegistryAddr = await tokenRegistry.getAddress();
+  console.log(`Points Token Registry: ${tokenRegistryAddr}`);
+
+  const ClaimValidatorFactory = await ethers.getContractFactory("OrgKycClaimValidator");
+  const claimValidator = await ClaimValidatorFactory.deploy(
+    custodian.address,
+    bountiesRegistryAddr,
+    tokenRegistryAddr,
+    notary.address,
+  );
   const claimValidatorAddress = await claimValidator.getAddress();
   console.log(`ClaimValidator: ${claimValidatorAddress}`);
+
+  for (let i = 0; i < stablecoinAddrs.length; i++) {
+    const stable = stablecoinAddrs[i];
+    claimValidator.connect(custodian).setStablecoin(stable, true);
+  }
 
   const BountiesConfigFactory = await ethers.getContractFactory("BountiesConfig");
   const bountiesConfig = await BountiesConfigFactory.deploy(
@@ -69,16 +89,8 @@ async function main() {
   const bountiesAddr = await bounties.getAddress();
   console.log(`Bounties: ${bountiesAddr}`);
 
-  const bountiesRegistry = await ethers.deployContract("BountiesRegistry", [custodian.address]);
-  const bountiesRegistryAddr = await bountiesRegistry.getAddress();
-  console.log(`Bounties Registry: ${bountiesRegistryAddr}`);
-
   // add bounties contract to registry
   bountiesRegistry.connect(custodian).addBountiesContract(bountiesAddr);
-
-  const tokenRegistry = await ethers.deployContract("PointsTokenRegistry", [custodian.address]);
-  const tokenRegistryAddr = await tokenRegistry.getAddress();
-  console.log(`Points Token Registry: ${tokenRegistryAddr}`);
 
   const pointsTokenFactory = await ethers.deployContract("PointsTokenFactory", [
     custodian.address,
