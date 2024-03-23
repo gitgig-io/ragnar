@@ -2,7 +2,7 @@
 
 pragma solidity ^0.8.20;
 
-import {IClaimValidator} from "./interfaces/IClaimValidator.sol";
+import {IClaimValidator} from "../interfaces/IClaimValidator.sol";
 
 // this is only used for testing
 contract SingleClaimValidator is IClaimValidator {

@@ -3,7 +3,7 @@
 pragma solidity ^0.8.20;
 
 import {AccessControlDefaultAdminRules} from "@openzeppelin/contracts/access/extensions/AccessControlDefaultAdminRules.sol";
-import {IClaimValidator} from "./interfaces/IClaimValidator.sol";
+import {IClaimValidator} from "../interfaces/IClaimValidator.sol";
 
 // this is only used for testing
 contract WhitelistClaimValidator is IClaimValidator, AccessControlDefaultAdminRules {

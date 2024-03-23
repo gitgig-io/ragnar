@@ -22,17 +22,32 @@ describe("Bounties", () => {
     const usdc = await TestERC20Factory.deploy("USDC", "USDC", 6, 1_000_000_000_000, issuer.address);
     const usdcAddr = await usdc.getAddress();
 
-    const arb = await TestERC20Factory.deploy("Arbitrum", "ARB", 18, BIG_SUPPLY, issuer.address);
-    const arbAddr = await arb.getAddress();
+    const dai = await TestERC20Factory.deploy("DAI", "DAI", 18, BIG_SUPPLY, issuer.address);
+    const daiAddr = await dai.getAddress();
 
     const weth = await TestERC20Factory.deploy("Wrapped ETH", "WETH", 18, BIG_SUPPLY, issuer.address);
     const wethAddr = await weth.getAddress();
 
+    const stablecoinAddrs = [usdcAddr, daiAddr];
+
     const IdentityFactory = await ethers.getContractFactory("Identity");
     const identity = await IdentityFactory.deploy(custodian.address, notary.address, "http://localhost:3000");
 
-    const ClaimValidatorFactory = await ethers.getContractFactory("StaticClaimValidator");
-    const claimValidator = await ClaimValidatorFactory.deploy(true);
+    const bountiesRegistry = await ethers.deployContract("BountiesRegistry", [custodian.address]);
+    const tokenRegistry = await ethers.deployContract("PointsTokenRegistry", [custodian.address]);
+
+    const ClaimValidatorFactory = await ethers.getContractFactory("OrgKycClaimValidator");
+    const claimValidator = await ClaimValidatorFactory.deploy(
+      custodian.address,
+      await bountiesRegistry.getAddress(),
+      await tokenRegistry.getAddress(),
+      notary.address,
+    );
+
+    for (let i = 0; i < stablecoinAddrs.length; i++) {
+      const stable = stablecoinAddrs[i];
+      claimValidator.connect(custodian).setStablecoin(stable, true);
+    }
 
     const BountiesConfigFactory = await ethers.getContractFactory("BountiesConfig");
     const bountiesConfig = await BountiesConfigFactory.deploy(
@@ -40,7 +55,7 @@ describe("Bounties", () => {
       notary.address,
       await identity.getAddress(),
       await claimValidator.getAddress(),
-      [usdcAddr, arbAddr, wethAddr]
+      [usdcAddr, daiAddr, wethAddr]
     );
 
     const BountiesFactory = await ethers.getContractFactory("Bounties");
@@ -50,7 +65,10 @@ describe("Bounties", () => {
       finance.address,
     );
 
-    return { owner, custodian, bounties, bountiesConfig, identity, usdc, arb, weth, finance, notary, issuer, maintainer, contributor, contributor2, contributor3 };
+    // add bounties contract to registry
+    bountiesRegistry.connect(custodian).addBountiesContract(await bounties.getAddress());
+
+    return { owner, custodian, bounties, bountiesConfig, bountiesRegistry, claimValidator, tokenRegistry, identity, usdc, dai, weth, finance, notary, issuer, maintainer, contributor, contributor2, contributor3 };
   }
 
   async function claimableBountyFixture(contributorIds?: string[]) {
@@ -974,12 +992,12 @@ describe("Bounties", () => {
 
     it("should not revert when validator returns true for at least one token", async () => {
       // given
-      const { executeMaintainerClaim, identity, arb, usdc, custodian, issuer, notary, bounties, bountiesConfig, platformId, repoId, issueId, contributor, contributorUserId } = await claimableLinkedBountyFixture();
+      const { executeMaintainerClaim, identity, dai, usdc, custodian, issuer, notary, bounties, bountiesConfig, platformId, repoId, issueId, contributor, contributorUserId } = await claimableLinkedBountyFixture();
 
       // post bounty
       const amount = 500;
       await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, token: usdc });
-      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, token: arb });
+      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, token: dai });
 
       // maintainer claim
       await executeMaintainerClaim();
@@ -1000,20 +1018,20 @@ describe("Bounties", () => {
 
       // when/then
       await expect(bounties.connect(contributor).contributorClaim(platformId, repoId, issueId)).to.not.be.reverted;
-      // ensure they got the USDC but not the ARB
+      // ensure they got the USDC but not the DAI
       expect(await usdc.balanceOf(await contributor.getAddress())).to.be.greaterThan(0);
-      expect(await arb.balanceOf(await contributor.getAddress())).to.equal(0);
+      expect(await dai.balanceOf(await contributor.getAddress())).to.equal(0);
     });
 
     it("should allow user to claim second token when previously rejected by validator", async () => {
       // given
-      const { executeMaintainerClaim, identity, arb, usdc, custodian, issuer, notary, bounties, bountiesConfig, platformId, repoId, issueId, contributor, contributorUserId } = await claimableLinkedBountyFixture();
+      const { executeMaintainerClaim, identity, dai, usdc, custodian, issuer, notary, bounties, bountiesConfig, platformId, repoId, issueId, contributor, contributorUserId } = await claimableLinkedBountyFixture();
       const staticClaimValidatorAddr = await bountiesConfig.claimValidatorContract();
 
       // post bounty
       const amount = 500;
       await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, token: usdc });
-      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, token: arb });
+      await postBounty({ amount, platformId, repoId, issueId, bounties, issuer, token: dai });
 
       // maintainer claim
       await executeMaintainerClaim();
@@ -1036,7 +1054,7 @@ describe("Bounties", () => {
 
       // ensure they got the USDC but not the ARB
       expect(await usdc.balanceOf(await contributor.getAddress())).to.equal(360)
-      expect(await arb.balanceOf(await contributor.getAddress())).to.equal(0);
+      expect(await dai.balanceOf(await contributor.getAddress())).to.equal(0);
 
       // set the validator back
       await bountiesConfig.connect(custodian).setClaimValidator(staticClaimValidatorAddr);
@@ -1046,7 +1064,7 @@ describe("Bounties", () => {
 
       // then
       expect(await usdc.balanceOf(await contributor.getAddress())).to.equal(360);
-      expect(await arb.balanceOf(await contributor.getAddress())).to.equal(360);
+      expect(await dai.balanceOf(await contributor.getAddress())).to.equal(360);
     });
   });
 
@@ -1729,7 +1747,7 @@ describe("Bounties", () => {
 
   describe('Scaling', () => {
     it('should handle a bounty with 25 tokens without autoclaim', async () => {
-      const { bounties, bountiesConfig, custodian, identity, issuer, maintainer, notary, contributor, contributor2, contributor3 } = await bountiesFixture();
+      const { bounties, bountiesConfig, claimValidator, custodian, identity, issuer, maintainer, notary, contributor, contributor2, contributor3 } = await bountiesFixture();
       const TestERC20Factory = await ethers.getContractFactory("TestERC20");
 
       const platformId = "1";
@@ -1747,11 +1765,14 @@ describe("Bounties", () => {
 
       let tokens = [];
       for (let i = 0; i < 25; i++) {
-        const token = await TestERC20Factory.deploy("TKN", "Token", 0, 1_000_000_000_000, issuer.address);
+        const token = await TestERC20Factory.deploy("TKN", "Token", 2, 1_000_000_000_000, issuer.address);
         const tokenAddr = await token.getAddress();
 
         // add token support
         await bountiesConfig.connect(custodian).addToken(tokenAddr);
+
+        // set token as a stable
+        await claimValidator.connect(custodian).setStablecoin(tokenAddr, true);
 
         // post bounty
         await token.connect(issuer).approve(await bounties.getAddress(), amount);
@@ -1787,7 +1808,7 @@ describe("Bounties", () => {
     });
 
     it('should handle a bounty with 25 tokens with autoclaim', async () => {
-      const { bounties, bountiesConfig, custodian, identity, issuer, maintainer, notary, contributor, contributor2, contributor3 } = await bountiesFixture();
+      const { bounties, bountiesConfig, claimValidator, custodian, identity, issuer, maintainer, notary, contributor, contributor2, contributor3 } = await bountiesFixture();
       const TestERC20Factory = await ethers.getContractFactory("TestERC20");
 
       const platformId = "1";
@@ -1805,11 +1826,14 @@ describe("Bounties", () => {
 
       let tokens = [];
       for (let i = 0; i < 25; i++) {
-        const token = await TestERC20Factory.deploy("TKN", "Token", 0, 1_000_000_000_000, issuer.address);
+        const token = await TestERC20Factory.deploy("TKN", "Token", 2, 1_000_000_000_000, issuer.address);
         const tokenAddr = await token.getAddress();
 
         // add token support
         await bountiesConfig.connect(custodian).addToken(tokenAddr);
+
+        // set token as a stable
+        await claimValidator.connect(custodian).setStablecoin(tokenAddr, true);
 
         // post bounty
         await token.connect(issuer).approve(await bounties.getAddress(), amount);

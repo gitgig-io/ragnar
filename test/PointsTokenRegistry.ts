@@ -35,8 +35,10 @@ describe("PointsTokenRegistry", () => {
   describe("Add", () => {
     it("should add token to registry", async () => {
       const { registry, token, trusted } = await pointsTokenRegistryFixture();
+      expect(await registry.isPointsToken(token.address)).to.be.false;
       await registry.connect(trusted).add("1", "gitgig-io", "cpTST", token.address);
       expect(await registry.getContract("1", "gitgig-io", "cpTST")).to.equal(token.address);
+      expect(await registry.isPointsToken(token.address)).to.be.true;
     });
 
     it("should revert when call by non-trusted-contract", async () => {

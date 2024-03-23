@@ -15,4 +15,6 @@ interface IPointsTokenRegistry {
         string calldata _org,
         string calldata _symbol
     ) external view returns (address);
+
+    function isPointsToken(address _token) external view returns (bool);
 }

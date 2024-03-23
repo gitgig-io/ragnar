@@ -3,7 +3,7 @@
     "inputs": [
       {
         "internalType": "address",
-        "name": "_tcAdmin",
+        "name": "_custodian",
         "type": "address"
       }
     ],
@@ -72,32 +72,6 @@
       }
     ],
     "name": "SafeCastOverflowedUintDowncast",
-    "type": "error"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "string",
-        "name": "platformId",
-        "type": "string"
-      },
-      {
-        "internalType": "string",
-        "name": "owner",
-        "type": "string"
-      },
-      {
-        "internalType": "string",
-        "name": "symbol",
-        "type": "string"
-      },
-      {
-        "internalType": "address",
-        "name": "existing",
-        "type": "address"
-      }
-    ],
-    "name": "SymbolAlreadyExists",
     "type": "error"
   },
   {
@@ -226,65 +200,34 @@
     "type": "event"
   },
   {
-    "anonymous": false,
-    "inputs": [
+    "inputs": [],
+    "name": "CUSTODIAN_ADMIN_ROLE",
+    "outputs": [
       {
-        "indexed": false,
-        "internalType": "string",
-        "name": "platformId",
-        "type": "string"
-      },
-      {
-        "indexed": false,
-        "internalType": "string",
-        "name": "owner",
-        "type": "string"
-      },
-      {
-        "indexed": false,
-        "internalType": "string",
-        "name": "symbol",
-        "type": "string"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "token",
-        "type": "address"
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
       }
     ],
-    "name": "SymbolRegistered",
-    "type": "event"
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "CUSTODIAN_ROLE",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
   },
   {
     "inputs": [],
     "name": "DEFAULT_ADMIN_ROLE",
-    "outputs": [
-      {
-        "internalType": "bytes32",
-        "name": "",
-        "type": "bytes32"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "TRUSTED_CONTRACT_ADMIN_ROLE",
-    "outputs": [
-      {
-        "internalType": "bytes32",
-        "name": "",
-        "type": "bytes32"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "TRUSTED_CONTRACT_ROLE",
     "outputs": [
       {
         "internalType": "bytes32",
@@ -311,18 +254,8 @@
       },
       {
         "internalType": "string",
-        "name": "_owner",
+        "name": "_platformUserId",
         "type": "string"
-      },
-      {
-        "internalType": "string",
-        "name": "_symbol",
-        "type": "string"
-      },
-      {
-        "internalType": "address",
-        "name": "_token",
-        "type": "address"
       }
     ],
     "name": "add",
@@ -405,35 +338,6 @@
   {
     "inputs": [
       {
-        "internalType": "string",
-        "name": "_platformId",
-        "type": "string"
-      },
-      {
-        "internalType": "string",
-        "name": "_owner",
-        "type": "string"
-      },
-      {
-        "internalType": "string",
-        "name": "_symbol",
-        "type": "string"
-      }
-    ],
-    "name": "getContract",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
         "internalType": "bytes32",
         "name": "role",
         "type": "bytes32"
@@ -482,25 +386,6 @@
       }
     ],
     "name": "hasRole",
-    "outputs": [
-      {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "name": "isPointsToken",
     "outputs": [
       {
         "internalType": "bool",
@@ -563,6 +448,24 @@
   {
     "inputs": [
       {
+        "internalType": "string",
+        "name": "_platformId",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "_platformUserId",
+        "type": "string"
+      }
+    ],
+    "name": "remove",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "bytes32",
         "name": "role",
         "type": "bytes32"
@@ -612,6 +515,79 @@
       }
     ],
     "name": "supportsInterface",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      },
+      {
+        "internalType": "string",
+        "name": "_platformId",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "_platformUserId",
+        "type": "string"
+      },
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "validate",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "",
+        "type": "string"
+      }
+    ],
+    "name": "whitelisted",
     "outputs": [
       {
         "internalType": "bool",
