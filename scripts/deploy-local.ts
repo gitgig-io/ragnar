@@ -89,8 +89,17 @@ async function main() {
   const bountiesAddr = await bounties.getAddress();
   console.log(`Bounties: ${bountiesAddr}`);
 
+  const bounties2 = await ethers.deployContract("Bounties", [
+    bountiesConfigAddress,
+    custodian.address,
+    finance.address,
+  ]);
+
+  const bountiesAddr2 = await bounties2.getAddress();
+  console.log(`Bounties2: ${bountiesAddr2}`);
+
   // add bounties contract to registry
-  bountiesRegistry.connect(custodian).addBountiesContract(bountiesAddr);
+  bountiesRegistry.connect(custodian).addBountiesContract(bountiesAddr2);
 
   const pointsTokenFactory = await ethers.deployContract("PointsTokenFactory", [
     custodian.address,
@@ -127,6 +136,7 @@ async function main() {
   const addresses = {
     // infra
     bounties: bountiesAddr,
+    bounties2: bountiesAddr2,
     bountiesConfig: bountiesConfigAddress,
     bountiesRegistry: bountiesRegistryAddr,
     claimValidator: claimValidatorAddress,
