@@ -99,6 +99,7 @@ async function main() {
   console.log(`Bounties2: ${bountiesAddr2}`);
 
   // add bounties contract to registry
+  bountiesRegistry.connect(custodian).addBountiesContract(bountiesAddr);
   bountiesRegistry.connect(custodian).addBountiesContract(bountiesAddr2);
 
   const pointsTokenFactory = await ethers.deployContract("PointsTokenFactory", [
