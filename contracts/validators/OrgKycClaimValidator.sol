@@ -39,7 +39,7 @@ contract OrgKycClaimValidator is IClaimValidator, EIP712, AccessControlDefaultAd
 
   event ConfigChange(address bountiesRegistry, address pointsTokenRegistry, address notary, uint256 kycThresholdAmount);
   event StablecoinRegistration(address token, bool registered);
-  event KnownUserStatusUpdate(string _platformId, string _orgName, string _platformUserId, bool _isKnown);
+  event KnownUserStatusUpdate(string platformId, string orgName, string platformUserId, bool isKnown);
 
   error AlreadySet();
   error InvalidSignature();
