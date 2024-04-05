@@ -363,7 +363,7 @@
       {
         "indexed": false,
         "internalType": "bool",
-        "name": "registered",
+        "name": "isRegistered",
         "type": "bool"
       }
     ],
