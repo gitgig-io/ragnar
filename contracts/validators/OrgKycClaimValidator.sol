@@ -119,7 +119,7 @@ contract OrgKycClaimValidator is IClaimValidator, EIP712, AccessControlDefaultAd
     uint256 _expires,
     bytes calldata _signature
   ) public {
-    if (_expires > (block.timestamp + 5 minutes) || _expires < block.timestamp) {
+    if (_expires > (block.timestamp + 30 minutes) || _expires < block.timestamp) {
       // replay attack so reject
       revert TimeframeError();
     }

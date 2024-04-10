@@ -405,7 +405,7 @@ describe("OrgKycClaimValidator", () => {
 
     it("should revert when expires too late", async () => {
       const { claimValidator, notary } = await orgKycClaimValidatorWithBountiesContractFixture();
-      const expires = expiresTimestamp() + 5 * 60;
+      const expires = expiresTimestamp() + 31 * 60;
 
       // when/then
       await expect(setKnownStatus(claimValidator, notary, { platformId, orgName, platformUserId, isKnown: true, expires }))
