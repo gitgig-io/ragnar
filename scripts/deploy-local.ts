@@ -130,8 +130,11 @@ async function main() {
       pointsTokenFactoryAddr,
     );
 
+  // set service fee to 0
+  await bountiesConfig.connect(custodian).setServiceFee(0);
+
   // set a custom fee for the issuer
-  await bountiesConfig.connect(custodian).setCustomServiceFee(issuer.address, 10);
+  // await bountiesConfig.connect(custodian).setCustomServiceFee(issuer.address, 10);
 
   // write out addresses to a file
   const addresses = {
