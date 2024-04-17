@@ -7,7 +7,7 @@ import { PointsTokenRegistry, PointsTokenFactory, BountiesRegistry } from "../ty
 
 const TOTAL_SUPPLY = 20_000_000 * 100; // * 100 because of two decimals
 const DECIMALS = 2;
-const FEE = ethers.WeiPerEther / ethers.toBigInt(5);
+const FEE = ethers.parseEther("0.002");
 
 describe("PointsTokenFactory", () => {
   async function bountiesFixture() {

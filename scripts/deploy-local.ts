@@ -3,7 +3,7 @@ import fs from "fs";
 
 const POINTS_TOKEN_FACTORY_TOTAL_SUPPLY = 20_000_000 * 100;
 const POINTS_TOKEN_FACTORY_DECIMALS = 2;
-const POINTS_TOKEN_FACTORY_FEE = ethers.WeiPerEther / ethers.toBigInt(5);
+const POINTS_TOKEN_FACTORY_FEE = ethers.parseEther("0.002");
 
 async function main() {
   const [owner, custodian, finance, notary, issuer] = await ethers.getSigners();
