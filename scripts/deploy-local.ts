@@ -66,7 +66,7 @@ async function main() {
 
   for (let i = 0; i < stablecoinAddrs.length; i++) {
     const stable = stablecoinAddrs[i];
-    claimValidator.connect(custodian).setStablecoin(stable, true);
+    await claimValidator.connect(custodian).setStablecoin(stable, true);
   }
 
   const BountiesConfigFactory = await ethers.getContractFactory("BountiesConfig");
@@ -99,8 +99,8 @@ async function main() {
   console.log(`Bounties2: ${bountiesAddr2}`);
 
   // add bounties contract to registry
-  bountiesRegistry.connect(custodian).addBountiesContract(bountiesAddr);
-  bountiesRegistry.connect(custodian).addBountiesContract(bountiesAddr2);
+  await bountiesRegistry.connect(custodian).addBountiesContract(bountiesAddr);
+  await bountiesRegistry.connect(custodian).addBountiesContract(bountiesAddr2);
 
   const pointsTokenFactory = await ethers.deployContract("PointsTokenFactory", [
     custodian.address,
@@ -123,7 +123,7 @@ async function main() {
     .grantRole(await bountiesConfig.TRUSTED_CONTRACT_ROLE(), pointsTokenFactory);
 
   // alow the pointsTokenFactory to register tokens in the registry
-  tokenRegistry
+  await tokenRegistry
     .connect(custodian)
     .grantRole(
       await tokenRegistry.TRUSTED_CONTRACT_ROLE(),
