@@ -17,20 +17,20 @@ async function main() {
   console.log("--------------------");
 
   const usdc = await ethers.deployContract("TestERC20", [
-    "TestUSDC",
-    "USDC",
+    "GitGig Test USDC",
+    "ggUSDC",
     6,
-    1_000_000_000_000,
+    1_000_000_000_000_000_000n,
     issuer.address,
   ]);
   const usdcAddress = await usdc.getAddress();
   console.log(`Test USDC: ${usdcAddress}`);
 
   const dai = await ethers.deployContract("TestERC20", [
-    "TestDAI",
-    "DAI",
-    6,
-    1_000_000_000_000,
+    "GitGig Test DAI",
+    "ggDAI",
+    18,
+    1_000_000_000_000_000_000_000_000_000_000n,
     issuer.address,
   ]);
   const daiAddress = await dai.getAddress();
