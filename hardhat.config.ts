@@ -9,12 +9,19 @@ env.config();
 
 const {
   ARB_GOERLI_RPC_URL,
+  // sepolia
   ARB_SEPOLIA_RPC_URL,
   ARB_SEPOLIA_OWNER_KEY,
   ARB_SEPOLIA_CUSTODIAN_KEY,
   ARB_SEPOLIA_FINANCE_KEY,
   ARB_SEPOLIA_NOTARY_KEY,
-  COINMARKETCAP_API_KEY
+  COINMARKETCAP_API_KEY,
+  // arbitrum (production)
+  ARB_RPC_URL,
+  ARB_OWNER_KEY,
+  ARB_CUSTODIAN_KEY,
+  ARB_FINANCE_KEY,
+  ARB_NOTARY_KEY
 } = process.env;
 
 const config: HardhatUserConfig = {
@@ -41,6 +48,15 @@ const config: HardhatUserConfig = {
     }
   },
   networks: {
+    arbitrum: {
+      url: ARB_RPC_URL!,
+      accounts: [
+        ARB_OWNER_KEY!,
+        ARB_CUSTODIAN_KEY!,
+        ARB_FINANCE_KEY!,
+        ARB_NOTARY_KEY!
+      ]
+    },
     goerli: {
       url: ARB_GOERLI_RPC_URL!,
       accounts: [

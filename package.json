@@ -7,6 +7,7 @@
     "compile": "hardhat compile",
     "deploy:local": "hardhat run --network localhost scripts/deploy-local.ts",
     "deploy:arb-sepolia": "hardhat run --network sepolia scripts/deploy-arb-sepolia.ts",
+    "deploy:production-arb": "hardhat run --network arbitrum scripts/deploy-production.ts",
     "node": "hardhat node",
     "fullflow:local": "hardhat run --network localhost test/integ/FullFlow.ts",
     "maintainerclaim:local": "hardhat run --network localhost test/integ/MaintainerClaim.ts",
