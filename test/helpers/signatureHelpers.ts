@@ -1,5 +1,5 @@
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { Bounties, PointsTokenFactory, Identity, OrgKycClaimValidator } from "../../typechain-types";
+import { Bounties, BountiesV2, PointsTokenFactory, Identity, OrgKycClaimValidator, MaintainerFees } from "../../typechain-types";
 import { TypedDataDomain, TypedDataField } from "ethers";
 
 export async function mintSignature(identity: Identity, params: any[], signer: HardhatEthersSigner) {
@@ -43,7 +43,7 @@ export async function mintSignature(identity: Identity, params: any[], signer: H
   return signature;
 }
 
-export async function maintainerClaimSignature(bounties: Bounties, params: any[], signer: HardhatEthersSigner) {
+export async function maintainerClaimSignature(bounties: Bounties | BountiesV2, params: any[], signer: HardhatEthersSigner) {
   const domain: TypedDataDomain = {
     name: "GitGigBounties",
     version: "1",
@@ -127,6 +127,102 @@ export async function setKnownStatusSignature(validator: OrgKycClaimValidator, p
     platformUserId: params[2] as string,
     isKnown: params[3] as boolean,
     expires: params[4] as number,
+  };
+
+  const signature = await signer.signTypedData(domain, types, values);
+  return signature;
+}
+
+/*
+ *
+ * Maintainer Fees
+ *
+ */
+
+export async function setOwnerFeeSignature(maintainerFees: MaintainerFees, params: any[], signer: HardhatEthersSigner) {
+  const domain: TypedDataDomain = {
+    name: "GitGigMaintainerFees",
+    version: "1",
+    chainId: 1337,
+    verifyingContract: await maintainerFees.getAddress(),
+  };
+
+  const types: Record<string, TypedDataField[]> = {
+    SetOwnerFee: [
+      { name: "platform", type: "string" },
+      { name: "owner", type: "string" },
+      { name: "fee", type: "uint8" },
+      { name: "expires", type: "uint256" },
+    ]
+  };
+
+  const values: Record<string, any> = {
+    platform: params[0] as string,
+    owner: params[1] as string,
+    fee: params[2] as number,
+    expires: params[3] as number,
+  };
+
+  const signature = await signer.signTypedData(domain, types, values);
+  return signature;
+}
+
+export async function setRepoFeeSignature(maintainerFees: MaintainerFees, params: any[], signer: HardhatEthersSigner) {
+  const domain: TypedDataDomain = {
+    name: "GitGigMaintainerFees",
+    version: "1",
+    chainId: 1337,
+    verifyingContract: await maintainerFees.getAddress(),
+  };
+
+  const types: Record<string, TypedDataField[]> = {
+    SetRepoFee: [
+      { name: "platform", type: "string" },
+      { name: "owner", type: "string" },
+      { name: "repo", type: "string" },
+      { name: "fee", type: "uint8" },
+      { name: "expires", type: "uint256" },
+    ]
+  };
+
+  const values: Record<string, any> = {
+    platform: params[0] as string,
+    owner: params[1] as string,
+    repo: params[2] as string,
+    fee: params[3] as number,
+    expires: params[4] as number,
+  };
+
+  const signature = await signer.signTypedData(domain, types, values);
+  return signature;
+}
+
+export async function setIssueFeeSignature(maintainerFees: MaintainerFees, params: any[], signer: HardhatEthersSigner) {
+  const domain: TypedDataDomain = {
+    name: "GitGigMaintainerFees",
+    version: "1",
+    chainId: 1337,
+    verifyingContract: await maintainerFees.getAddress(),
+  };
+
+  const types: Record<string, TypedDataField[]> = {
+    SetIssueFee: [
+      { name: "platform", type: "string" },
+      { name: "owner", type: "string" },
+      { name: "repo", type: "string" },
+      { name: "issue", type: "string" },
+      { name: "fee", type: "uint8" },
+      { name: "expires", type: "uint256" },
+    ]
+  };
+
+  const values: Record<string, any> = {
+    platform: params[0] as string,
+    owner: params[1] as string,
+    repo: params[2] as string,
+    issue: params[3] as string,
+    fee: params[4] as number,
+    expires: params[5] as number,
   };
 
   const signature = await signer.signTypedData(domain, types, values);

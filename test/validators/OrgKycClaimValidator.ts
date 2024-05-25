@@ -3,6 +3,7 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setKnownStatusSignature } from "../helpers/signatureHelpers";
 import { OrgKycClaimValidator } from "../../typechain-types";
+import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
 
 const KYC_THRESHOLD = ethers.toBigInt(500) * ethers.toBigInt(10) ** ethers.toBigInt(18);
 
@@ -24,7 +25,7 @@ describe("OrgKycClaimValidator", () => {
     return stableToken;
   }
 
-  async function orgKycClaimValidatorFixture() {
+  async function createOrgKycClaimValidatorFixture() {
     const accounts = await accountsFixture();
     const { custodian, issuer, notary, tokenFactory } = accounts;
 
@@ -39,8 +40,8 @@ describe("OrgKycClaimValidator", () => {
     const bountiesRegistry = await ethers.deployContract("BountiesRegistry", [custodian.address]);
 
     const tokenRegistry = await ethers.deployContract("PointsTokenRegistry", [custodian.address]);
-    tokenRegistry.connect(custodian).grantRole(await tokenRegistry.TRUSTED_CONTRACT_ROLE(), tokenFactory.address);
-    tokenRegistry.connect(tokenFactory).add("1", "gitgig-io", await pointsToken.symbol(), await pointsToken.getAddress());
+    await tokenRegistry.connect(custodian).grantRole(await tokenRegistry.TRUSTED_CONTRACT_ROLE(), tokenFactory.address);
+    await tokenRegistry.connect(tokenFactory).add("1", "gitgig-io", await pointsToken.symbol(), await pointsToken.getAddress());
 
     const claimValidatorFactory = await ethers.getContractFactory("OrgKycClaimValidator");
     const claimValidator = await claimValidatorFactory.deploy(
@@ -50,16 +51,24 @@ describe("OrgKycClaimValidator", () => {
       notary.address,
     );
 
-    claimValidator.connect(custodian).setStablecoin(await stableToken.getAddress(), true);
+    await claimValidator.connect(custodian).setStablecoin(await stableToken.getAddress(), true);
 
     return { ...accounts, claimValidator, bountiesRegistry, tokenRegistry, stableToken, pointsToken, arbToken };
   }
 
-  async function orgKycClaimValidatorWithBountiesContractFixture() {
+  async function orgKycClaimValidatorFixture() {
+    return await loadFixture(createOrgKycClaimValidatorFixture);
+  }
+
+  async function createOrgKycClaimValidatorWithBountiesContractFixture() {
     const fixtures = await orgKycClaimValidatorFixture();
     const { custodian, bountiesContract1, bountiesRegistry } = fixtures;
     await bountiesRegistry.connect(custodian).addBountiesContract(bountiesContract1.address);
     return fixtures;
+  }
+
+  async function orgKycClaimValidatorWithBountiesContractFixture() {
+    return await loadFixture(createOrgKycClaimValidatorWithBountiesContractFixture);
   }
 
   function toAmount(amount: number, decimals: number) {

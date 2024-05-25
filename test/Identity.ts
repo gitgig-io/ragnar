@@ -1,17 +1,22 @@
 import { expect } from "chai";
-import { ethers, network } from "hardhat";
+import { ethers } from "hardhat";
 import { mintSignature } from "./helpers/signatureHelpers";
 import { Identity } from "../typechain-types";
 // import * as Web3 from 'web3';
 import { ERC721Validator } from '@nibbstack/erc721-validator';
+import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
 
 describe("Identity", () => {
-  async function identityFixture() {
+  async function createIdentityFixture() {
     const [owner, custodian, notary, user, user2] = await ethers.getSigners();
     const baseUri = "http://localhost:4000";
     const IdentityFactory = await ethers.getContractFactory("Identity");
     const identity = await IdentityFactory.deploy(custodian.address, notary.address, baseUri);
     return { identity, custodian, notary, owner, user, user2, baseUri };
+  }
+
+  async function identityFixture() {
+    return await loadFixture(createIdentityFixture);
   }
 
   async function applyMint(identity: Identity, params: any[], signature: Uint8Array | string) {
@@ -45,7 +50,6 @@ describe("Identity", () => {
     const transferParams = mintParams.slice(0, 4).concat([2]);
     return { ...fixtures, mintParams, transferParams };
   }
-
 
   describe("Deployment", () => {
     it("should be able to deploy identity contract", async () => {

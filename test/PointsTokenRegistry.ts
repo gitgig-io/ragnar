@@ -1,6 +1,7 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
 
 describe("PointsTokenRegistry", () => {
   async function accountsFixture() {
@@ -15,7 +16,7 @@ describe("PointsTokenRegistry", () => {
     return pointsTokenRegistry;
   }
 
-  async function pointsTokenRegistryFixture() {
+  async function createPointsTokenRegistryFixture() {
     const accounts = await accountsFixture();
     const { custodian, trusted } = accounts;
     const registry = await createPointsTokenRegistry(custodian);
@@ -23,6 +24,10 @@ describe("PointsTokenRegistry", () => {
     await registry.connect(custodian).grantRole(await registry.TRUSTED_CONTRACT_ROLE(), trusted.address);
 
     return { ...accounts, registry };
+  }
+
+  async function pointsTokenRegistryFixture() {
+    return await loadFixture(createPointsTokenRegistryFixture);
   }
 
   describe("Deployment", () => {

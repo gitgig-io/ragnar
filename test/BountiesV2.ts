@@ -3,12 +3,12 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { loadFixture, time } from "@nomicfoundation/hardhat-network-helpers";
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
-import { Bounties, BountiesConfig, Identity, TestERC20 } from "../typechain-types";
-import { maintainerClaimSignature, mintSignature } from "./helpers/signatureHelpers";
+import { BountiesV2, BountiesConfig, Identity, TestERC20, MaintainerFees } from "../typechain-types";
+import { maintainerClaimSignature, mintSignature, setOwnerFeeSignature } from "./helpers/signatureHelpers";
 
 const BIG_SUPPLY = ethers.toBigInt("1000000000000000000000000000");
 
-describe("Bounties", () => {
+describe("BountiesV2", () => {
   async function getAddresses() {
     const [owner, custodian, finance, notary, issuer, maintainer, contributor, contributor2, contributor3] = await ethers.getSigners();
     return { owner, custodian, finance, notary, issuer, maintainer, contributor, contributor2, contributor3 };
@@ -58,9 +58,32 @@ describe("Bounties", () => {
       [usdcAddr, daiAddr, wethAddr]
     );
 
-    const BountiesFactory = await ethers.getContractFactory("Bounties");
+    const MaintainerFeesFactory = await ethers.getContractFactory("MaintainerFees");
+    const maintainerFees = await MaintainerFeesFactory.deploy(
+      custodian.address,
+      notary.address
+    );
+
+    const StringUtilsFactory = await ethers.getContractFactory("StringUtils");
+    const stringUtils = await StringUtilsFactory.deploy();
+
+    const BountyUtilsFactory = await ethers.getContractFactory("BountyUtils", {
+      libraries: {
+        StringUtils: await stringUtils.getAddress(),
+      }
+    });
+    const bountyUtils = await BountyUtilsFactory.deploy();
+
+    const BountiesFactory = await ethers.getContractFactory("BountiesV2", {
+      libraries: {
+        BountyUtils: await bountyUtils.getAddress(),
+        StringUtils: await stringUtils.getAddress(),
+      }
+    });
+
     const bounties = await BountiesFactory.deploy(
       await bountiesConfig.getAddress(),
+      await maintainerFees.getAddress(),
       custodian.address,
       finance.address,
     );
@@ -68,11 +91,12 @@ describe("Bounties", () => {
     // add bounties contract to registry
     await bountiesRegistry.connect(custodian).addBountiesContract(await bounties.getAddress());
 
-    return { owner, custodian, bounties, bountiesConfig, bountiesRegistry, claimValidator, tokenRegistry, identity, usdc, dai, weth, finance, notary, issuer, maintainer, contributor, contributor2, contributor3 };
+    return { owner, custodian, bounties, bountiesConfig, bountiesRegistry, claimValidator, maintainerFees, tokenRegistry, identity, usdc, dai, weth, finance, notary, issuer, maintainer, contributor, contributor2, contributor3 };
   }
 
   async function bountiesFixture() {
-    return await loadFixture(createBountiesFixture);
+    const fixtures = await loadFixture(createBountiesFixture);
+    return fixtures;
   }
 
   async function claimableBountyFixture(contributorIds?: string[]) {
@@ -127,7 +151,7 @@ describe("Bounties", () => {
     platformId: string;
     repoId: string;
     issueId: string;
-    bounties: Bounties;
+    bounties: BountiesV2;
     issuer: HardhatEthersSigner;
     token: TestERC20;
   }
@@ -140,6 +164,21 @@ describe("Bounties", () => {
   async function maintainerFee(bountiesConfig: BountiesConfig, amount: number) {
     const serviceFee = ethers.toNumber(await bountiesConfig.serviceFee());
     const maintainerFee = ethers.toNumber(await bountiesConfig.maintainerFee());
+    const amountAfterServiceFee = amount - (serviceFee * amount / 100);
+    return (maintainerFee * amountAfterServiceFee / 100);
+  }
+
+  async function customMaintainerFee(bountiesConfig: BountiesConfig, maintainerFees: MaintainerFees, platform: string, owner: string, repo: string, issue: string, amount: number) {
+    const serviceFee = ethers.toNumber(await bountiesConfig.serviceFee());
+    let maintainerFee: number;
+    const [hasCustomFee, customMaintainerFee] = await maintainerFees.getCustomFee(platform, owner, repo, issue);
+
+    if (hasCustomFee) {
+      maintainerFee = ethers.toNumber(customMaintainerFee);
+    } else {
+      maintainerFee = ethers.toNumber(await bountiesConfig.maintainerFee());
+    }
+
     const amountAfterServiceFee = amount - (serviceFee * amount / 100);
     return (maintainerFee * amountAfterServiceFee / 100);
   }
@@ -189,6 +228,30 @@ describe("Bounties", () => {
 
     return claimValidator;
   }
+
+  interface CustomFeeAndPostedBountyProps {
+    maintainerFee: number;
+    bountyAmount: number;
+  }
+
+  async function customFeeAndPostedBountyFixture({ maintainerFee: fee, bountyAmount: amount }: CustomFeeAndPostedBountyProps) {
+    const fixtures = await claimableLinkedBountyFixture();
+    const { bounties, maintainer, maintainerFees, notary, issuer, platformId, repoId, issueId, usdc, executeMaintainerClaim } = fixtures;
+    const [owner, repo] = repoId.split('/');
+
+    // set custom fee
+    const now = await time.latest();
+    const expires = now + (20 * 60);
+    const signature = await setOwnerFeeSignature(maintainerFees, [platformId, owner, fee, expires], notary);
+    await maintainerFees.connect(maintainer).setOwnerFee(platformId, owner, fee, expires, signature);
+
+    // post bounty
+    await usdc.connect(issuer).approve(await bounties.getAddress(), amount);
+    await bounties.connect(issuer).postBounty(platformId, repoId, issueId, await usdc.getAddress(), amount);
+
+    return { ...fixtures, owner, repo, executeMaintainerClaim };
+  }
+
 
   describe("Deployment", () => {
     it("should be able to deploy bounty contract", async () => {
@@ -645,6 +708,104 @@ describe("Bounties", () => {
         const contributor = contributorSigners[i];
         expect(await usdc.balanceOf(contributor.address)).to.be.equal(0);
       }
+    });
+
+    it('should respect custom fee', async () => {
+      const fee = 50;
+      const amount = 500;
+      const { bountiesConfig, maintainer, maintainerFees, platformId, issueId, owner, repo, executeMaintainerClaim, usdc } = await customFeeAndPostedBountyFixture({ maintainerFee: fee, bountyAmount: amount });
+
+      // when
+      await executeMaintainerClaim();
+
+      // then
+      const expectedAmount = await customMaintainerFee(bountiesConfig, maintainerFees, platformId, owner, repo, issueId, amount);
+      expect(await usdc.balanceOf(await maintainer.getAddress())).to.be.eq(expectedAmount);
+
+      // make sure that the customMaintainerFee != default maintainer fee
+      const defaultExpectedFee = await maintainerFee(bountiesConfig, amount)
+      expect(defaultExpectedFee).to.be.not.eq(expectedAmount);
+    });
+
+    it('should respect custom fee of 0', async () => {
+      const fee = 0;
+      const amount = 500;
+      const { bountiesConfig, maintainer, maintainerFees, platformId, issueId, owner, repo, executeMaintainerClaim, usdc } = await customFeeAndPostedBountyFixture({ maintainerFee: fee, bountyAmount: amount });
+
+      // when
+      await executeMaintainerClaim();
+
+      // then
+      const expectedAmount = await customMaintainerFee(bountiesConfig, maintainerFees, platformId, owner, repo, issueId, amount);
+      expect(expectedAmount).to.be.eq(0);
+      expect(await usdc.balanceOf(await maintainer.getAddress())).to.be.eq(expectedAmount);
+
+      // make sure that the customMaintainerFee != default maintainer fee
+      const defaultExpectedFee = await maintainerFee(bountiesConfig, amount)
+      expect(defaultExpectedFee).to.be.not.eq(expectedAmount);
+    });
+
+    it('should still emit BountyClaim event when fee is 0', async () => {
+      const { bounties, executeMaintainerClaim, platformId, repoId, issueId, maintainerUserId, maintainer, usdc } = await customFeeAndPostedBountyFixture({ maintainerFee: 0, bountyAmount: 500 });
+
+      // when/then
+      await expect(executeMaintainerClaim())
+        .to.emit(bounties, "BountyClaim")
+        .withArgs(
+          platformId,
+          repoId,
+          issueId,
+          maintainerUserId,
+          maintainer.address,
+          "maintainer",
+          await usdc.getAddress(),
+          await usdc.symbol(),
+          await usdc.decimals(),
+          0
+        );
+    });
+
+    it('should respect custom fee of 100', async () => {
+      const fee = 100;
+      const amount = 500;
+      const { bountiesConfig, maintainer, maintainerFees, platformId, issueId, owner, repo, executeMaintainerClaim, usdc } = await customFeeAndPostedBountyFixture({ maintainerFee: fee, bountyAmount: amount });
+
+      // when
+      await executeMaintainerClaim();
+
+      // then
+      const servFee = await serviceFee(bountiesConfig, amount);
+      const expectedAmount = await customMaintainerFee(bountiesConfig, maintainerFees, platformId, owner, repo, issueId, amount);
+      expect(expectedAmount).to.be.eq(amount - servFee);
+      expect(await usdc.balanceOf(await maintainer.getAddress())).to.be.eq(expectedAmount);
+
+      // make sure that the customMaintainerFee != default maintainer fee
+      const defaultExpectedFee = await maintainerFee(bountiesConfig, amount)
+      expect(defaultExpectedFee).to.be.not.eq(expectedAmount);
+    });
+
+    // we don't emit contributor claims when amount=0 because if the user is not identity-linked
+    // they will never claim amount=0 so we would only get those events for contributors that are 
+    // identity-linked before maintainer claim which is inconsitent. better to not bother firing them
+    // since we don't rely on them. if the user claims manually claims amount=0 at some point we may get an event for it.
+    it('should emit maintainer claim when maintainer fee is 100', async () => {
+      const { bounties, executeMaintainerClaim, platformId, repoId, issueId, maintainerUserId, maintainer, usdc } = await customFeeAndPostedBountyFixture({ maintainerFee: 100, bountyAmount: 500 });
+
+      // when/then
+      await expect(executeMaintainerClaim())
+        .to.emit(bounties, "BountyClaim")
+        .withArgs(
+          platformId,
+          repoId,
+          issueId,
+          maintainerUserId,
+          maintainer.address,
+          "maintainer",
+          await usdc.getAddress(),
+          await usdc.symbol(),
+          await usdc.decimals(),
+          400
+        );
     });
   });
 
@@ -1304,12 +1465,12 @@ describe("Bounties", () => {
     });
 
     it('should emit ConfigChange event', async () => {
-      const { bounties, custodian, issuer } = await bountiesFixture();
+      const { bounties, custodian, issuer, maintainerFees } = await bountiesFixture();
 
       // when / then
       await expect(bounties.connect(custodian).setConfigContract(issuer.address))
         .to.emit(bounties, "ConfigChange")
-        .withArgs(issuer.address);
+        .withArgs(issuer.address, await maintainerFees.getAddress());
     });
 
     it('should not allow non-custodian to update service fee', async () => {

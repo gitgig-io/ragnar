@@ -2,6 +2,7 @@ import { expect } from "chai";
 import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { Bounties } from "../typechain-types";
+import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
 
 const AMOUNT = 10_000;
 
@@ -16,7 +17,7 @@ describe("PointsToken", () => {
     return await BountiesRegistry.deploy(custodian.address);
   }
 
-  async function pointsTokenFixture() {
+  async function createPointsTokenFixture() {
     const fixtures = await accountsFixture();
     const { custodian, issuer } = fixtures;
     const bountiesRegistry = await createBountiesRegistry(custodian);
@@ -34,12 +35,20 @@ describe("PointsToken", () => {
     return { ...fixtures, pointsToken, bountiesRegistry };
   };
 
-  async function pointsTokenWithBountiesFixture() {
+  async function pointsTokenFixture() {
+    return await loadFixture(createPointsTokenFixture);
+  }
+
+  async function createPointsTokenWithBountiesFixture() {
     const fixtures = await pointsTokenFixture();
     const { bountiesRegistry, custodian, issuer, bountiesContract1, pointsToken } = fixtures;
     await bountiesRegistry.connect(custodian).addBountiesContract(await bountiesContract1.getAddress());
     await pointsToken.connect(issuer).transfer(bountiesContract1.address, AMOUNT);
     return fixtures;
+  }
+
+  async function pointsTokenWithBountiesFixture() {
+    return await loadFixture(createPointsTokenWithBountiesFixture);
   }
 
   describe("Deployment", () => {

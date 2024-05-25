@@ -1,11 +1,12 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
 
 const BIG_SUPPLY = ethers.toBigInt("1000000000000000000000000000");
 
 describe("BountiesConfig", () => {
-  async function bountiesConfigFixture() {
+  async function createBountiesConfigFixture() {
     const [owner, custodian, finance, notary, issuer, maintainer, contributor, contributor2, contributor3] = await ethers.getSigners();
 
     const TestERC20Factory = await ethers.getContractFactory("TestERC20");
@@ -35,6 +36,10 @@ describe("BountiesConfig", () => {
     );
 
     return { owner, custodian, config, identity, claimValidator, usdc, arb, weth, finance, notary, issuer, maintainer, contributor, contributor2, contributor3 };
+  }
+
+  async function bountiesConfigFixture() {
+    return await loadFixture(createBountiesConfigFixture);
   }
 
   async function usdcFixture(issuer: HardhatEthersSigner) {

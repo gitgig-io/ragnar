@@ -3,6 +3,7 @@ import "@nomicfoundation/hardhat-toolbox";
 import "@nomiclabs/hardhat-web3";
 import "hardhat-abi-exporter";
 import "hardhat-gas-reporter";
+import "hardhat-watcher";
 import env from "dotenv";
 
 env.config();
@@ -79,6 +80,21 @@ const config: HardhatUserConfig = {
       chainId: 1337,
       gasPrice: 200000000,
       initialBaseFeePerGas: 0,
+    }
+  },
+  watcher: {
+    compilation: {
+      tasks: [
+        'compile',
+        'export-abi'
+      ],
+    },
+    test: {
+      tasks: [{ command: 'test', params: { testFiles: ['{path}'] } }],
+      files: ['./test/**/*'],
+      verbose: true,
+      clearOnStart: true,
+      start: 'echo Running tests...',
     }
   }
 };

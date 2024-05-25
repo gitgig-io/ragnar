@@ -1,6 +1,7 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
 
 describe("BountiesRegistry", () => {
   async function accountsFixture() {
@@ -15,7 +16,7 @@ describe("BountiesRegistry", () => {
     return bountiesRegistry;
   }
 
-  async function bountiesRegistryFixture() {
+  async function createBountiesRegistryFixture() {
     const accounts = await accountsFixture();
     const { custodian } = accounts;
     const registry = await createBountiesRegistry(custodian);
@@ -23,11 +24,19 @@ describe("BountiesRegistry", () => {
     return { ...accounts, registry };
   }
 
-  async function bountiesRegistryWithContractFixture() {
+  async function bountiesRegistryFixture() {
+    return await loadFixture(createBountiesRegistryFixture);
+  }
+
+  async function createBountiesRegistryWithContractFixture() {
     const fixtures = await bountiesRegistryFixture();
     const { custodian, bountiesContract1, registry } = fixtures;
     await registry.connect(custodian).addBountiesContract(bountiesContract1.address);
     return fixtures;
+  }
+
+  async function bountiesRegistryWithContractFixture() {
+    return await loadFixture(createBountiesRegistryWithContractFixture);
   }
 
   describe("Deployment", () => {

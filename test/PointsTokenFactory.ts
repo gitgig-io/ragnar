@@ -4,6 +4,7 @@ import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { createPointsTokenSignature } from "./helpers/signatureHelpers";
 import { PointsTokenRegistry, PointsTokenFactory, BountiesRegistry } from "../typechain-types";
+import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
 
 const TOTAL_SUPPLY = 20_000_000 * 100; // * 100 because of two decimals
 const DECIMALS = 2;
@@ -51,7 +52,7 @@ describe("PointsTokenFactory", () => {
 
     const BountiesRegistryFactory = await ethers.getContractFactory("BountiesRegistry");
     const bountiesRegistry = await BountiesRegistryFactory.deploy(custodian.address);
-    bountiesRegistry.connect(custodian).addBountiesContract(await bounties.getAddress());
+    await bountiesRegistry.connect(custodian).addBountiesContract(await bounties.getAddress());
 
     return {
       owner,
@@ -108,7 +109,7 @@ describe("PointsTokenFactory", () => {
     return pointsFactory;
   }
 
-  async function pointsTokenFactoryFixture() {
+  async function createPointsTokenFactoryFixture() {
     const fixtures = await bountiesFixture();
     const { bountiesRegistry, custodian, finance, notary } = fixtures;
     const tokenRegistry = await createPointsTokenRegistry(custodian);
@@ -123,7 +124,11 @@ describe("PointsTokenFactory", () => {
     return { ...fixtures, tokenRegistry, pointsFactory };
   }
 
-  async function pFixture() {
+  async function pointsTokenFactoryFixture() {
+    return await loadFixture(createPointsTokenFactoryFixture);
+  }
+
+  async function createPFixture() {
     const fixtures = await pointsTokenFactoryFixture();
     const { custodian, bountiesConfig, pointsFactory, tokenRegistry } = fixtures;
 
@@ -132,7 +137,7 @@ describe("PointsTokenFactory", () => {
       .connect(custodian)
       .grantRole(await bountiesConfig.TRUSTED_CONTRACT_ROLE(), pointsFactory);
 
-    tokenRegistry
+    await tokenRegistry
       .connect(custodian)
       .grantRole(
         await tokenRegistry.TRUSTED_CONTRACT_ROLE(),
@@ -140,6 +145,10 @@ describe("PointsTokenFactory", () => {
       );
 
     return fixtures;
+  }
+
+  async function pFixture() {
+    return await loadFixture(createPFixture);
   }
 
   const BASE_PARAMS = ["Test Points", "cpTST", "1", "GitGig"] as const;
